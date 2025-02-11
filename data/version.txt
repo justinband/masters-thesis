@@ -1,0 +1,5 @@
+Date: January, 27, 2025
+Retrieved from: https://portal.electricitymaps.com/datasets/DK
+
+***
+Given the small amount of data we do not use version control (e.g., DVC)
