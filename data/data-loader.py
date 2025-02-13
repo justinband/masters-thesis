@@ -56,6 +56,43 @@ class DataLoader():
             return df
         else: # Data fits
             return self.data.iloc[start_ix:end_ix, :]
+        
+    def get_optimal_subrange(self, range_df, job_size, use_subrange=True):
+        """
+        Given a range data, this function finds the subrange with the minimum average
+        values.
+
+        For carbon intensity data, this means that means to run without stopping.
+        """
+        
+        if use_subrange:
+            # best possible subrange with only run in hindsight
+            opt_sub_df = None
+            min_mean = float('inf')
+
+            # Init sum for first subrange
+            subrange_sum = range_df.iloc[:job_size]['carbon_intensity'].sum()
+            for curr_ix in range(range_df.shape[0] - job_size + 1):
+                subrange_mean = subrange_sum / job_size
+
+                if subrange_mean < min_mean:
+                    opt_sub_df = range_df.iloc[curr_ix:(curr_ix + job_size)]
+                    min_mean = subrange_mean
+
+                if curr_ix + job_size < range_df.shape[0]:
+                    subrange_sum -= range_df.iloc[curr_ix]['carbon_intensity']
+                    subrange_sum += range_df.iloc[curr_ix + job_size]['carbon_intensity']
+        else:
+            # best possible run/pause with hindsight
+            opt_sub_df = range_df.sort_values(by='carbon_intensity')[0:job_size]
+
+
+        plt.plot(range_df['date'], range_df['carbon_intensity'], label='Carbon Intensity')
+        for val in opt_sub_df['date']:
+            plt.axvline(val, color='darkred')
+        plt.legend()
+        plt.show()        
+
 
     def plot_hist(self):
         col = 'carbon_intensity'
@@ -101,3 +138,8 @@ class DataLoader():
         plt.title(f"Danish Carbon Intensities from {min_date} to {max_date}")
 
         plt.show()
+
+x = DataLoader()
+range_sample = x.sample_range(hourly_window=48, seed=123)
+x.get_optimal_subrange(range_df=range_sample, job_size=10)
+
