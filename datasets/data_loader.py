@@ -8,15 +8,17 @@ import numpy as np
 from numpy import random
 
 class DataLoader():
-    def __init__(self):
-        self.data_name = 'dk_energy_data.pkl'
-
+    def __init__(self, path="./"):
+        self.data_name = os.path.join(path, 'dk_energy_data.pkl')
+        
         if os.path.isfile(self.data_name): # Load data from pkl file
             with open(self.data_name, 'rb') as f:
                 self.data = pickle.load(f)
         else: # Load data from source
             arr = []
-            for fn in [fn for fn in os.listdir('./') if '.csv' in fn]:
+            filenames = [os.path.join(path, fn) for fn in os.listdir(path) if '.csv' in fn]
+            for fn in filenames:
+                print(fn)
                 arr.append(pd.read_csv(fn, sep=',')[["Datetime (UTC)", "Carbon Intensity gCO₂eq/kWh (direct)"]])
 
             df = pd.concat(arr)
@@ -28,13 +30,26 @@ class DataLoader():
             with open(self.data_name, 'wb') as f: # Save data
                 pickle.dump(self.data, f)
 
-    def normalize_data(self):
+    def _normalize_data(self):
         df = self.data
         col = 'carbon_intensity'
         self.data['normalized'] = np.interp(df[col], (df[col].min(), df[col].max()), (0, 1)) 
+
+    def get_n_samples(self, hourly_window, num_samples):
+        # TODO: Missing seeds for replication. Maybe this could come from class variable?
+        seeds = []
+        samples = []
+        for _ in range(num_samples):
+            sample, seed = self.sample_range(hourly_window)
+            seeds.append(seed)
+            samples.append(sample)
+        return samples, seeds
                 
     def sample_range(self, hourly_window, seed=None):
         if seed:
+            random.seed(seed)
+        else:
+            seed = random.randint(0, 999999)
             random.seed(seed)
 
         nrows = range(self.data.shape[0])
@@ -49,92 +64,64 @@ class DataLoader():
         # We pursue (2)
 
         if end_ix > nrows.stop: # Gone past available data
-            print(x)
             diff = end_ix - nrows.stop
             first = self.data.iloc[start_ix:nrows.stop, :]
             wrap = self.data.iloc[0:diff, :]
             df = pd.concat([first, wrap])
-            return df
+            return df, seed
         else: # Data fits
-            return self.data.iloc[start_ix:end_ix, :]
+            return self.data.iloc[start_ix:end_ix, :], seed
         
-    def find_optimal_intensities(self, range_df, job_size, find_subrange=False, show_plots=False):
-        """
-        Given a range, this function finds optimal intensities relating to the job size.
-        In essence, these are the best carbon intensities in hindsight. It finds and returns the
-        dates with the minimum carbon intensities. This corresponds with scheduling a job and being
-        able to run/pause.
+    def _get_optimal_intensities(self, df, job_size, get_subrange=False):
+        opt_df = df.nsmallest(job_size, 'carbon_intensity')
+        opt_total = opt_df['carbon_intensity'].sum()
 
-        This function also allows for finding a subrange, rather than disjoint data. This exists
-        as a "low carbon range" might be more practical and important. It corresponds with
-        scheduling a job and not being allowed to pause it until it's complete.
-
-        Lastly, plots can be created for these ranges for better comparison.
-        """
-        # best possible run/pause with hindsight
-        opt_run_pause_df = range_df.sort_values(by='carbon_intensity')[0:job_size]
-        opt_run_pause_ci = opt_run_pause_df['carbon_intensity'].sum()
+        if get_subrange:
+            min_intensity = float('inf')
+            subrange_df, subrange_total = None, None
         
-        # best possible subrange with only run in hindsight
-        opt_sub_df = None
-        opt_sub_ci = 0
-        min_mean = float('inf')
+            rolling_sum = df.iloc[:job_size]['carbon_intensity'].sum()
+            for i in range(len(df) - job_size + 1):
+                avg_intensity = rolling_sum / job_size
 
-        if find_subrange:
-            # Init sum for first subrange
-            subrange_sum = range_df.iloc[:job_size]['carbon_intensity'].sum()
-            for curr_ix in range(range_df.shape[0] - job_size + 1):
-                subrange_mean = subrange_sum / job_size
+                if avg_intensity < min_intensity:
+                    min_intensity = avg_intensity
+                    subrange_df = df.iloc[i:i + job_size]
+                    subrange_total = rolling_sum
+                
+                if i + job_size < len(df):
+                    rolling_sum -= df.iloc[i]['carbon_intensity']
+                    rolling_sum += df.iloc[i + job_size]['carbon_intensity']
 
-                if subrange_mean < min_mean:
-                    min_mean = subrange_mean
-                    opt_sub_df = range_df.iloc[curr_ix:(curr_ix + job_size)]
-                    opt_sub_ci = subrange_sum
+            return opt_df, opt_total, subrange_df, subrange_total
+        
+        return opt_df, opt_total, None, None
 
-                if curr_ix + job_size < range_df.shape[0]:
-                    subrange_sum -= range_df.iloc[curr_ix]['carbon_intensity']
-                    subrange_sum += range_df.iloc[curr_ix + job_size]['carbon_intensity']
+    def _plot_carbon_data(self, ax, df, selected_df, title):
+        ax.plot(df['date'], df['carbon_intensity'], 'o-', label='Carbon Intensity')
+        ax.plot(selected_df['date'], selected_df['carbon_intensity'], 'ro', label='Optimal Points')
+        ax.set_ylabel(r"gCO$_2$eq/kWh")
+        ax.set_xlabel("Date")
+        ax.set_title(title)
+        ax.legend()
 
+    def _visualize_optimal_carbon_data(self, df, opt_df, opt_ci, sub_df=None, sub_ci=None):
+        if sub_df is not None:
+            fig, ax = plt.subplots(1, 2, figsize=(10, 5))
+            self._plot_carbon_data(ax[0], df, opt_df, f"[Optimal] Carbon Intensity: {opt_ci:.2f}")
+            self._plot_carbon_data(ax[1], df, sub_df, f"[Optimal Subrange] Carbon Intensity: {sub_ci:.2f}")
+        else:
+            fix, ax = plt.subplots(figsize=(7, 5))
+            self._plot_carbon_data(ax, df, opt_df, f"[Optimal] Carbon Intensity: {opt_ci:.2f}")
+        
+        plt.show()
 
+    def find_and_plot_optimal_ci(self, df, job_size, find_subrange=False, show_plots=False):
+        opt_df, opt_ci, sub_df, sub_ci = self._get_optimal_intensities(df, job_size, get_subrange=find_subrange)
         if show_plots:
-            if find_subrange:
-                _, ax = plt.subplots(1, 2, figsize=(10, 5))
-                # Run/Pause
-                rp_xs = opt_run_pause_df['date'].to_numpy()
-                rp_ys = opt_run_pause_df['carbon_intensity'].to_numpy()
-                ax[0].plot(range_df['date'], range_df['carbon_intensity'], 'o-', label='Carbon Intensity')
-                ax[0].plot(rp_xs, rp_ys, 'ro', label='Highlighted Points') 
-                ax[0].set_ylabel(r"gCO$_2$eq/kWh")
-                ax[0].set_xlabel("Date")
-                ax[0].set_title(f"[Optimal] Carbon Intensity: {opt_run_pause_ci:.2f}")
-                ax[0].legend()
-
-                # Subrange
-                opt_xs = opt_sub_df['date'].to_numpy()
-                opt_ys = opt_sub_df['carbon_intensity'].to_numpy()
-                ax[1].plot(range_df['date'], range_df['carbon_intensity'], 'o-', label='Carbon Intensity')
-                ax[1].plot(opt_xs, opt_ys, 'ro', label='Highlighted Points') 
-                ax[1].set_ylabel(r"gCO$_2$eq/kWh")
-                ax[1].set_xlabel("Date")
-                ax[1].set_title(f"[Optimal Subrange] Carbon Intensity: {opt_sub_ci:.2f}")
-                ax[1].legend()
-
-                plt.show()
-            else:
-                # Run/Pause
-                rp_xs = opt_run_pause_df['date'].to_numpy()
-                rp_ys = opt_run_pause_df['carbon_intensity'].to_numpy()
-                plt.plot(range_df['date'], range_df['carbon_intensity'], 'o-', label='Carbon Intensity')
-                plt.plot(rp_xs, rp_ys, 'ro', label='Highlighted Points') 
-                plt.ylabel(r"gCO$_2$eq/kWh")
-                plt.xlabel("Date")
-                plt.title(f"[Optimal] Carbon Intensity: {opt_run_pause_ci:.2f}")
-                plt.legend()
-                plt.show()
-
-        return opt_run_pause_df, opt_run_pause_ci, opt_sub_df, opt_run_pause_ci
-
-
+            self._visualize_optimal_carbon_data(df, opt_df, opt_ci, sub_df, sub_ci)
+        return opt_df, opt_ci, sub_df, sub_ci
+    
     def plot_hist(self):
         col = 'carbon_intensity'
         plt.hist(self.data[col],
