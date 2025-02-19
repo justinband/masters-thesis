@@ -7,7 +7,7 @@ class QLearn():
         self.epsilon = epsilon
         self.alpha = alpha
         self.beta = beta
-        self.q = np.zeros((self.env.nS, self.env.nA))
+        self.q = np.random.rand(self.env.nS, self.env.nA) 
 
     def choose_action(self, q, state):
         if np.random.rand() < self.epsilon:
