@@ -44,17 +44,21 @@ class DataLoader():
         col = 'carbon_intensity'
         self.data['normalized'] = np.interp(df[col], (df[col].min(), df[col].max()), (0, 1)) 
 
-    def get_n_samples(self, hourly_window, num_samples):
+    def get_n_samples(self, hourly_window, num_samples, seeds=None):
         """
         Returns: list of samples and corresponding seeds
         """
-        # TODO: Missing seeds for replication. Maybe this could come from class variable?
-        seeds = []
-        samples = []
-        for _ in range(num_samples):
-            sample, seed = self.sample_range(hourly_window)
-            seeds.append(seed)
-            samples.append(sample)
+        if seeds:
+            for seed in range(len(seeds)):
+                sample, _ = self.sample_range(hourly_window, seed)
+        else:
+            seeds = []
+            samples = []
+            for _ in range(num_samples):
+                sample, seed = self.sample_range(hourly_window)
+                seeds.append(seed)
+                samples.append(sample)
+        
         return samples, seeds
                 
     def sample_range(self, hourly_window, seed=None):
