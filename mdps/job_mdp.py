@@ -1,9 +1,7 @@
-from pandas import DataFrame
-from datasets import DataLoader
 import numpy as np
 
 class JobMDP():
-    def __init__(self, job_size, energy_df):
+    def __init__(self, job_size, energy_df=None):
         # MDP Parameters
         self.nS = job_size  # num states
         self.nA = 2         # num actions
@@ -49,11 +47,10 @@ class JobMDP():
             return -1, -1, self.complete 
         
         ### Otherwise, execute action
-        self.curr_loss = self.energy.iloc[self.time]
+        self.curr_loss = self.energy['normalized'].iloc[self.time]
 
         if ((a == self.run) and (self.s == self.nS - 1)) or self.complete: # Goes to terminal state or completed
             self.complete = True
-            print("Job is complete:")
         else: # Perform action
             self.s = np.argmax(self.p[self.s, a]) # deterministic selection
 
@@ -64,9 +61,9 @@ class JobMDP():
     def reset(self, energy_df=None):
         self.s = 0
         self.time = 0
-        self.curr_loss = self.energy.iloc[self.time]
         self.complete = False
-        if energy_df:
+        if energy_df is not None:
             self.energy = energy_df
+            self.curr_loss = self.energy['normalized'].iloc[self.time]
 
         return self.s
