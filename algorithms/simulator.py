@@ -2,6 +2,8 @@ from datasets import DataLoader
 from mdps import JobMDP
 from algorithms import QLearn
 import matplotlib.pyplot as plt
+from tqdm.auto import tqdm
+
 
 class Simulator():
     def __init__(self, alg, job_size, deadline, episodes, seeds=None):
@@ -15,21 +17,20 @@ class Simulator():
         self.losses = []
 
     def train(self):
-        for i in range(self.episodes):
+        for _ in tqdm(range(self.episodes)):
             data = self.samples[0]
-            episode_loss, n_steps = self.alg.train_episode(data)
+            episode_loss, _ = self.alg.train_episode(data)
 
             self.losses.append(episode_loss)
-            
-            print(f"Iteration: {i}: Loss = {(episode_loss/n_steps):.3f}, Steps = {n_steps}")
 
     def plot_training(self):
         plt.plot(self.losses)
         plt.show()
-            
+
+
 job_size = 10
 deadline = 48
-episodes = 1000
+episodes = 10000
 
 mdp = JobMDP(job_size)
 q_learn = QLearn(mdp) #s Should update the hyper-params
