@@ -6,17 +6,24 @@ import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import numpy as np
 from numpy import random
+from pathlib import Path
+
 
 class DataLoader():
-    def __init__(self, path="./"):
-        self.data_name = os.path.join(path, 'dk_energy_data.pkl')
+
+    def __init__(self, path=None):
+        DATA_DIR = Path(__file__).parent
+        if path:
+            DATA_DIR = path
+            
+        self.data_name = os.path.join(DATA_DIR, 'dk_energy_data.pkl')
         
         if os.path.isfile(self.data_name): # Load data from pkl file
             with open(self.data_name, 'rb') as f:
                 self.data = pickle.load(f)
         else: # Load data from source
             arr = []
-            filenames = [os.path.join(path, fn) for fn in os.listdir(path) if '.csv' in fn]
+            filenames = [os.path.join(DATA_DIR, fn) for fn in os.listdir(path) if '.csv' in fn]
             for fn in filenames:
                 print(fn)
                 arr.append(pd.read_csv(fn, sep=',')[["Datetime (UTC)", "Carbon Intensity gCO₂eq/kWh (direct)"]])
@@ -30,12 +37,17 @@ class DataLoader():
             with open(self.data_name, 'wb') as f: # Save data
                 pickle.dump(self.data, f)
 
+        self.unique = self.data['normalized'].nunique()
+
     def _normalize_data(self):
         df = self.data
         col = 'carbon_intensity'
         self.data['normalized'] = np.interp(df[col], (df[col].min(), df[col].max()), (0, 1)) 
 
     def get_n_samples(self, hourly_window, num_samples):
+        """
+        Returns: list of samples and corresponding seeds
+        """
         # TODO: Missing seeds for replication. Maybe this could come from class variable?
         seeds = []
         samples = []
@@ -103,6 +115,12 @@ class DataLoader():
         ax.set_ylabel(r"gCO$_2$eq/kWh")
         ax.set_xlabel("Date")
         ax.set_title(title)
+
+        # TODO: Fix this to be nicer
+        ax.xaxis.set_major_locator(mdates.AutoDateLocator())
+        ax.xaxis.set_major_formatter(mdates.DateFormatter('%H-%d-%m-%Y'))
+        ax.xaxis.set_minor_locator(mdates.MonthLocator(bymonth=(1, 7)))
+        ax.tick_params(axis='x', rotation=45)
         ax.legend()
 
     def _visualize_optimal_carbon_data(self, df, opt_df, opt_ci, sub_df=None, sub_ci=None):
