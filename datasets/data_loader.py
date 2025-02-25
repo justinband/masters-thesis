@@ -44,6 +44,20 @@ class DataLoader():
         col = 'carbon_intensity'
         self.data['normalized'] = np.interp(df[col], (df[col].min(), df[col].max()), (0, 1)) 
 
+    def losses_to_intensity(self, losses):
+        """
+        Converts a list of normalized losses to the original carbon intensity metric.
+
+        This function is useful for reporting, whereas 0-1 losses are needed for training.
+        """
+        intensity = 0
+        print("-------- CONVERTING -------")
+        for l in losses:
+            # FIXME: is .iloc[0] really needed?
+            print(f"Loss = {l}")
+            intensity += self.data[self.data['normalized'] == l]['carbon_intensity'].iloc[0]
+        return intensity
+
     def get_n_samples(self, hourly_window, num_samples, seeds=None):
         """
         Returns: list of samples and corresponding seeds

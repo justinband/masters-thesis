@@ -1,8 +1,9 @@
 from datasets import DataLoader
 from mdps import JobMDP
-from algorithms import QLearn
+from algorithms import QLearn, LinearQ
 import matplotlib.pyplot as plt
 from tqdm.auto import tqdm
+import numpy as np
 
 
 class Simulator():
@@ -19,22 +20,29 @@ class Simulator():
     def train(self):
         for _ in tqdm(range(self.episodes)):
             data = self.samples[0]
-            episode_loss, _ = self.alg.train_episode(data)
+            episode_losses, _ = self.alg.train_episode(data)
+            self.losses.append(np.sum(episode_losses))
 
-            self.losses.append(episode_loss)
-
-    def plot_training(self):
+    def plot_losses(self, title=""):
         plt.plot(self.losses)
+        plt.title(title)
         plt.show()
 
 
 job_size = 10
-deadline = 48
-episodes = 10000
+deadline = 48 # hours
+episodes = 100000
 
 mdp = JobMDP(job_size)
-q_learn = QLearn(mdp) #s Should update the hyper-params
-sim = Simulator(q_learn, job_size, deadline, episodes)
 
+# q_learn = QLearn(mdp) #s Should update the hyper-params
+# sim = Simulator(q_learn, job_size, deadline, episodes)
+# sim.train()
+# sim.plot_training("Q-Learn")
+# sim.plot_losses("Q-Learn Incurred")
+
+mdp.reset()
+linear_q = LinearQ(mdp, state_dim=2, action_dim=2)
+sim = Simulator(linear_q, job_size, deadline, episodes)
 sim.train()
-sim.plot_training()
+sim.plot_losses("Linear Q")

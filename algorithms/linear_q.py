@@ -40,7 +40,7 @@ class LinearQ():
     def train_episode(self, data):
         progress = self.env.reset(energy_df=data)
         is_done = False
-        episode_loss = 0
+        episode_losses = []
         n_steps = 0
 
         while not is_done:
@@ -53,8 +53,8 @@ class LinearQ():
 
             self.update_weights(state, action, loss, next_state)
 
-            episode_loss += loss
+            episode_losses.append(loss)
             n_steps += 1
             state = next_state
 
-        return episode_loss, n_steps
+        return episode_losses, n_steps
