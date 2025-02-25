@@ -33,10 +33,15 @@ class JobMDP():
 
     def get_next_state(self):
         return np.argmax(self.p[self.s, self.run]) # Assumes that states are known
+
+    def get_latency(self):
+        latency = (self.s + 1) / (self.time + 1)
+        # print(f"Latency = {1 - latency:.3f} : {(self.s+1)}/{self.time+1}")
+        return 1 - latency
     
-    def get_loss(self, a=None):
+    def get_loss(self, a=None): 
         if (a is not None) and (a == self.pause):
-            return 0
+            return self.get_latency()
         else:
             return self.energy['normalized'].iloc[self.time]
 
