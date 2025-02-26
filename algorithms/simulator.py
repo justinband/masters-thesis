@@ -4,12 +4,20 @@ from algorithms import QLearn, LinearQ
 import matplotlib.pyplot as plt
 from tqdm.auto import tqdm
 import numpy as np
+import argparse
 
 
 class Simulator():
     def __init__(self, alg, job_size, deadline, episodes, seeds=None):
         self.energy = DataLoader()
-        self.alg = alg # Alg should be initialized with MDP
+
+        if alg == "ql":
+            self.alg = QLearn(JobMDP(job_size))
+        elif alg == "linq":
+            state_dim = 2
+            action_dim = 2
+            self.alg = LinearQ(JobMDP(job_size), state_dim=state_dim, action_dim=action_dim)
+
         self.job_size = job_size
         self.deadline = deadline
         self.episodes = episodes
@@ -29,20 +37,18 @@ class Simulator():
         plt.show()
 
 
-job_size = 10
-deadline = 48 # hours
-episodes = 100000
+if __name__ == "__main__":
+    job_size = 10
+    deadline = 48 # hours
+    episodes = 100000
 
-mdp = JobMDP(job_size)
+    parser = argparse.ArgumentParser(description="Run simulator with a specified algorithm.")
+    parser.add_argument("algorithm", type=str, help="Algorithm to run. Options: ql, linq")
+    parser.add_argument("-e", "--episodes", type=int, default=episodes, help="Number of episodes to train on")
+    parser.add_argument("-j", "--job-size", type=int, default=job_size, help="Size of a job")
+    parser.add_argument("-d", "--deadline", type=int, default=deadline, help="Deadline jobs must complete by")
+    args = parser.parse_args()
 
-# q_learn = QLearn(mdp) #s Should update the hyper-params
-# sim = Simulator(q_learn, job_size, deadline, episodes)
-# sim.train()
-# sim.plot_training("Q-Learn")
-# sim.plot_losses("Q-Learn Incurred")
-
-mdp.reset()
-linear_q = LinearQ(mdp, state_dim=2, action_dim=2)
-sim = Simulator(linear_q, job_size, deadline, episodes)
-sim.train()
-sim.plot_losses("Linear Q")
+    sim = Simulator(args.algorithm, args.job_size, args.deadline, args.episodes)
+    sim.train()
+    sim.plot_losses(title=args.algorithm)
