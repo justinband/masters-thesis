@@ -11,12 +11,14 @@ from pathlib import Path
 
 class DataLoader():
 
-    def __init__(self, path=None):
+    def __init__(self, path=None, seed=None):
         DATA_DIR = Path(__file__).parent
         if path:
             DATA_DIR = path
-            
         self.data_name = os.path.join(DATA_DIR, 'dk_energy_data.pkl')
+
+        if seed:
+            random.seed(seed)
         
         if os.path.isfile(self.data_name): # Load data from pkl file
             with open(self.data_name, 'rb') as f:
@@ -58,30 +60,17 @@ class DataLoader():
             intensity += self.data[self.data['normalized'] == l]['carbon_intensity'].iloc[0]
         return intensity
 
-    def get_n_samples(self, hourly_window, num_samples, seeds=None):
+    def get_n_samples(self, hourly_window, num_samples):
         """
-        Returns: list of samples and corresponding seeds
+        Returns: list of samples
         """
-        if seeds:
-            for seed in range(len(seeds)):
-                sample, _ = self.sample_range(hourly_window, seed)
-        else:
-            seeds = []
-            samples = []
-            for _ in range(num_samples):
-                sample, seed = self.sample_range(hourly_window)
-                seeds.append(seed)
-                samples.append(sample)
-        
-        return samples, seeds
+        samples = []
+        for _ in range(num_samples):
+            s = self.sample_range(hourly_window)
+            samples.append(s)
+        return samples
                 
-    def sample_range(self, hourly_window, seed=None):
-        if seed:
-            random.seed(seed)
-        else:
-            seed = random.randint(0, 999999)
-            random.seed(seed)
-
+    def sample_range(self, hourly_window):
         nrows = range(self.data.shape[0])
         start_ix = random.randint(nrows.start, nrows.stop)
         end_ix = start_ix + hourly_window
@@ -98,9 +87,9 @@ class DataLoader():
             first = self.data.iloc[start_ix:nrows.stop, :]
             wrap = self.data.iloc[0:diff, :]
             df = pd.concat([first, wrap])
-            return df, seed
+            return df
         else: # Data fits
-            return self.data.iloc[start_ix:end_ix, :], seed
+            return self.data.iloc[start_ix:end_ix, :]
         
     def _get_optimal_intensities(self, df, job_size, get_subrange=False):
         opt_df = df.nsmallest(job_size, 'carbon_intensity')

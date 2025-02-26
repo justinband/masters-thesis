@@ -1,6 +1,6 @@
 from datasets import DataLoader
 from mdps import JobMDP
-from algorithms import QLearn, LinearQ
+from algorithms import QLearn, InformedQL, LinearQ
 import matplotlib.pyplot as plt
 from tqdm.auto import tqdm
 import numpy as np
@@ -8,20 +8,23 @@ import argparse
 
 
 class Simulator():
-    def __init__(self, alg, job_size, deadline, episodes, seeds=None):
-        self.energy = DataLoader()
+    def __init__(self, alg, job_size, deadline, episodes, seed=None):
+        self.energy = DataLoader(seed=seed)
 
+        mdp = JobMDP(job_size)
         if alg == "ql":
-            self.alg = QLearn(JobMDP(job_size))
+            self.alg = QLearn(mdp)
+        elif alg == "informed-ql":
+            self.alg = InformedQL(mdp)
         elif alg == "linq":
             state_dim = 2
             action_dim = 2
-            self.alg = LinearQ(JobMDP(job_size), state_dim=state_dim, action_dim=action_dim)
+            self.alg = LinearQ(mdp, state_dim=state_dim, action_dim=action_dim)
 
         self.job_size = job_size
         self.deadline = deadline
         self.episodes = episodes
-        self.samples, self.seeds = self.energy.get_n_samples(deadline, episodes, seeds)
+        self.samples = self.energy.get_n_samples(deadline, episodes)
 
         self.losses = []
 
@@ -43,12 +46,13 @@ if __name__ == "__main__":
     episodes = 100000
 
     parser = argparse.ArgumentParser(description="Run simulator with a specified algorithm.")
-    parser.add_argument("algorithm", type=str, help="Algorithm to run. Options: ql, linq")
+    parser.add_argument("algorithm", type=str, help="Algorithm to run. Options: ql, informed-ql, linq")
     parser.add_argument("-e", "--episodes", type=int, default=episodes, help="Number of episodes to train on")
     parser.add_argument("-j", "--job-size", type=int, default=job_size, help="Size of a job")
     parser.add_argument("-d", "--deadline", type=int, default=deadline, help="Deadline jobs must complete by")
+    parser.add_argument("-s", "--seed", type=int, help="Defines a seed. Useful for reproduction.")
     args = parser.parse_args()
 
-    sim = Simulator(args.algorithm, args.job_size, args.deadline, args.episodes)
+    sim = Simulator(args.algorithm, args.job_size, args.deadline, args.episodes, args.seed)
     sim.train()
     sim.plot_losses(title=args.algorithm)

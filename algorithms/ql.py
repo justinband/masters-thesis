@@ -19,8 +19,7 @@ class QLearn():
         delta = np.min(self.q[s_prime]) - self.q[s, a]
         # print(f"Loss = {loss}")
         # print(f"Delta = {delta}")
-        self.q[s, a] = self.q[s, a] + self.alpha * (loss + delta)
-        return self.q[s, a]
+        return self.q[s, a] + self.alpha * (loss + delta)
     
 
     def train_episode(self, data):
@@ -33,7 +32,7 @@ class QLearn():
             action = self.choose_action(self.q, state)
             next_state, loss, is_done = self.env.step(action)
 
-            self.update_q_value(state, action, loss, next_state)
+            self.q[state, action] = self.update_q_value(state, action, loss, next_state)
 
             episode_losses.append(loss)
             n_steps += 1
