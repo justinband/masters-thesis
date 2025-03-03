@@ -1,16 +1,18 @@
 from algorithms import QLearn
 
 class InformedQL(QLearn):
-    def __init__(self, env, epsilon = 0.1, alpha = 1e-6):
-        super().__init__(env, epsilon, alpha)
+    def __init__(self, env, epsilon = 0.1, alpha = 1e-6, latency=0):
+        super().__init__(env, epsilon, alpha, latency)
 
     def train_episode(self, data):
         state = self.env.reset(energy_df=data)
         is_done = False
         episdoe_losses = []
-        n_steps = 0
 
         while not is_done:
+            # (0) get latency
+            curr_latency = self.env.get_latency()
+
             # (1) observe the next state
             s_prime = self.env.get_next_state()
 
@@ -26,7 +28,7 @@ class InformedQL(QLearn):
                 q_copy[state, a] = self.update_q_value(state, a, l, s_prime)
             
             # (4) Choose action based on updated context and current state
-            action = self.choose_action(q_copy, state)
+            action = self.choose_action(q_copy, state, self.env.time, curr_latency)
             next_state, loss, is_done = self.env.step(action)
 
             # (5) Update Q-Val based on chosen action
@@ -34,9 +36,8 @@ class InformedQL(QLearn):
             
             # (6) Update counters
             episdoe_losses.append(loss)
-            n_steps += 1
             state = next_state
 
-        return episdoe_losses, n_steps
+        return episdoe_losses, self.env.time
 
         

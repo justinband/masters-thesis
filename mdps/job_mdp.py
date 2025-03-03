@@ -35,12 +35,14 @@ class JobMDP():
         return np.argmax(self.p[self.s, self.run]) # Assumes that states are known
 
     def get_latency(self):
-        latency = (self.s + 1) / (self.time + 1)
-        # print(f"Latency = {1 - latency:.3f} : {(self.s+1)}/{self.time+1}")
-        return 1 - latency
+        if self.s == 0: # No runs performed
+            latency = self.time
+        else: # Some runs performed, calc latency
+            latency = (self.time - self.s) / self.s
+        return latency
     
     def get_loss(self, a=None): 
-        if (a is not None) and (a == self.pause):
+        if (a is not None) and (a == self.pause): # Get latency on pause action
             return self.get_latency()
         else:
             return self.energy['normalized'].iloc[self.time]
@@ -61,12 +63,7 @@ class JobMDP():
         
         # Non-terminating action
         self.s = np.argmax(self.p[self.s, a]) # deterministic selection
-        self.curr_loss = self.get_loss(a)
         self.time += 1
-
-        # Deadline reached - last possible action
-        if self.time == len(self.energy): 
-            self.complete = True
 
         return self.s, self.curr_loss, self.complete
         

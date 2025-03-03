@@ -1,12 +1,10 @@
 import numpy as np
+from algorithms import LearningAlg
 
+class LinearQ(LearningAlg):
 
-class LinearQ():
-
-    def __init__(self, env, state_dim, action_dim = 2, alpha = 1e-6, epsilon = 0.1):
-        self.env = env
-        self.alpha = alpha      # Learning rate
-        self.epsilon = epsilon  # Exploration-rate
+    def __init__(self, env, state_dim, action_dim = 2, alpha = 1e-6, epsilon = 0.1, latency=0):
+        super().__init__(env, epsilon, alpha, latency)
 
         self.state_dim = state_dim
         self.action_dim = action_dim
@@ -41,7 +39,6 @@ class LinearQ():
         progress = self.env.reset(energy_df=data)
         is_done = False
         episode_losses = []
-        n_steps = 0
 
         while not is_done:
             curr_intensity = self.env.get_loss()
@@ -54,7 +51,6 @@ class LinearQ():
             self.update_weights(state, action, loss, next_state)
 
             episode_losses.append(loss)
-            n_steps += 1
             state = next_state
 
-        return episode_losses, n_steps
+        return episode_losses, self.env.time
