@@ -4,8 +4,8 @@ class InformedQL(QLearn):
     def __init__(self, env, epsilon = 0.1, alpha = 1e-6, latency=0):
         super().__init__(env, epsilon, alpha, latency)
 
-    def train_episode(self, data):
-        state = self.env.reset(energy_df=data)
+    def train_episode(self, start_idx):
+        state = self.env.reset(start_idx)
         is_done = False
         episdoe_losses = []
 

@@ -35,8 +35,8 @@ class LinearQ(LearningAlg):
         error = loss - curr_q
         self.w[action] += self.alpha * error * state
 
-    def train_episode(self, data):
-        progress = self.env.reset(energy_df=data)
+    def train_episode(self, start_idx):
+        progress = self.env.reset(start_idx)
         is_done = False
         episode_losses = []
 

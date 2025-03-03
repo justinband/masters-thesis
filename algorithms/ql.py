@@ -19,12 +19,10 @@ class QLearn(LearningAlg):
     def update_q_value(self, s, a, loss, s_prime):
         # Q(s, a) = Q(s, a) + a(loss + min_a' Q(s', a') - Q(s, a))
         delta = np.min(self.q[s_prime]) - self.q[s, a]
-        # print(f"Loss = {loss}")
-        # print(f"Delta = {delta}")
         return self.q[s, a] + self.alpha * (loss + delta)
 
-    def train_episode(self, data):
-        state = self.env.reset(energy_df=data)
+    def train_episode(self, start_idx):
+        state = self.env.reset(start_idx)
         is_done = False
         episode_losses = []
 
