@@ -9,12 +9,11 @@ import seaborn as sns
 import pandas as pd
 
 class Simulator():
-    def __init__(self, algs, job_size, deadline, episodes, latency, iterations, verbose, seed=None):
+    def __init__(self, algs, job_size, episodes, latency, iterations, verbose, seed=None):
         self.seed = np.random.randint(0, 2**36 - 1) if seed is None else seed
         
         self.energy = DataLoader(seed=seed)
         self.job_size = job_size
-        self.deadline = deadline
         self.episodes = episodes
         self.latency = latency
         self.iterations = iterations
@@ -120,7 +119,6 @@ def str_to_bool(value):
 if __name__ == "__main__":
     # Defaults
     job_size = 10
-    deadline = 48 # hours
     latency = 1
     episodes = 100000
 
@@ -130,7 +128,6 @@ if __name__ == "__main__":
     parser.add_argument("algorithms", nargs="*", help=f"Algorithm to run. Options: {", ".join(existing_algs)}")
     parser.add_argument("-e", "--episodes", type=int, default=episodes, help="Number of episodes to train on")
     parser.add_argument("-j", "--job-size", type=int, default=job_size, help="Size of a job")
-    parser.add_argument("-d", "--deadline", type=int, default=deadline, help="Deadline jobs must complete by")
     parser.add_argument("-l", "--latency", type=int, default=latency, help="Amount of latency we're willing to incur. Latency=0 means no latency. Latency=1 effectively doubles runtime")
     parser.add_argument("-i", "--iterations", type=int, default=1,help="Number of iterations to run training over. Results are averaged.")
 
@@ -145,7 +142,6 @@ if __name__ == "__main__":
             
     sim = Simulator(args.algorithms,
                     args.job_size, 
-                    args.deadline,
                     args.episodes,
                     args.latency,
                     args.iterations,
