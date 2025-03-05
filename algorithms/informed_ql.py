@@ -28,7 +28,7 @@ class InformedQL(QLearn):
                 q_copy[state, a] = self.update_q_value(state, a, l, s_prime)
             
             # (4) Choose action based on updated context and current state
-            action = self.choose_action(q_copy, state, self.env.time, curr_latency)
+            action = self.choose_action(q_copy, state, curr_latency)
             next_state, loss, is_done = self.env.step(action)
 
             # (5) Update Q-Val based on chosen action

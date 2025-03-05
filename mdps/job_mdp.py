@@ -7,6 +7,7 @@ class JobMDP():
         self.nA = 2         # num actions
         self.s = 0          # initial state
         self.time = 0       # current run time
+        self.idx = 0        # current index in energy data
 
         # Actions
         self.pause = 0
@@ -39,14 +40,14 @@ class JobMDP():
             latency = self.time
         else: # Some runs performed, calc latency
             latency = (self.time - self.s) / self.s
+            
         return latency
     
-    def get_loss(self, a=None): 
+    def get_loss(self, a=None):
         if (a is not None) and (a == self.pause): # Get latency on pause action
             return self.get_latency()
         else:
-            return self.energy['normalized'].iloc[self.time]
-
+            return self.energy['normalized'].iloc[self.idx]
 
     def step(self, a):
         """
@@ -54,6 +55,9 @@ class JobMDP():
 
         Running in the last state advances the MDP to a complete/terminal state.
         """
+        if self.idx == len(self.energy) - 1: # Data wrap around
+            self.idx = 0
+
         self.curr_loss = self.get_loss(a)
 
         # Terminating Action - running in last state reaches terminal state
@@ -64,15 +68,14 @@ class JobMDP():
         # Non-terminating action
         self.s = np.argmax(self.p[self.s, a]) # deterministic selection
         self.time += 1
+        self.idx += 1
 
         return self.s, self.curr_loss, self.complete
         
-    def reset(self, energy_df=None):
+    def reset(self, start_idx):
         self.s = 0
         self.time = 0
         self.complete = False
-        if energy_df is not None:
-            self.energy = energy_df
-            self.curr_loss = self.get_loss()
-
+        self.idx = start_idx
+        self.curr_loss = self.get_loss()
         return self.s

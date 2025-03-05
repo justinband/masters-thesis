@@ -8,8 +8,8 @@ class QLearn(LearningAlg):
         super().__init__(env, epsilon, alpha, latency)
         self.q = np.random.rand(self.env.nS, self.env.nA) 
 
-    def choose_action(self, q, state, time, curr_latency):
-        if (self.max_latency == 0) or (curr_latency >= time): # Mandatory run
+    def choose_action(self, q, state, curr_latency):
+        if (self.max_latency == 0) or (curr_latency >= self.max_latency): # Mandatory run
             return self.env.run
         elif np.random.rand() < self.epsilon: # Explore
             return np.random.choice(self.env.nA)
@@ -28,7 +28,7 @@ class QLearn(LearningAlg):
 
         while not is_done:
             curr_latency = self.env.get_latency()
-            action = self.choose_action(self.q, state, self.env.time, curr_latency)
+            action = self.choose_action(self.q, state, curr_latency)
             next_state, loss, is_done = self.env.step(action)
 
             self.q[state, action] = self.update_q_value(state, action, loss, next_state)
@@ -37,3 +37,6 @@ class QLearn(LearningAlg):
             state = next_state
 
         return episode_losses, self.env.time
+    
+    def reset(self):
+        self.q = np.random.rand(self.env.nS, self.env.nA) 
