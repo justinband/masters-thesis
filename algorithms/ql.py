@@ -1,41 +1,42 @@
 import numpy as np
+from algorithms import LearningAlg
+import matplotlib.pyplot as plt
 
-class QLearn():
+class QLearn(LearningAlg):
 
-    def __init__(self, env, epsilon = 0.1, alpha = 1e-6):
-        self.env = env
-        self.epsilon = epsilon
-        self.alpha = alpha
+    def __init__(self, env, epsilon = 0.1, alpha = 1e-6, latency=0):
+        super().__init__(env, epsilon, alpha, latency)
         self.q = np.random.rand(self.env.nS, self.env.nA) 
 
-    def choose_action(self, q, state):
-        if np.random.rand() < self.epsilon:
+    def choose_action(self, q, state, curr_latency):
+        if (self.max_latency == 0) or (curr_latency >= self.max_latency): # Mandatory run
+            return self.env.run
+        elif np.random.rand() < self.epsilon: # Explore
             return np.random.choice(self.env.nA)
-        else:
+        else: # Exploit
             return np.argmin(q[state]) # Choose smallest Q-val
         
     def update_q_value(self, s, a, loss, s_prime):
         # Q(s, a) = Q(s, a) + a(loss + min_a' Q(s', a') - Q(s, a))
         delta = np.min(self.q[s_prime]) - self.q[s, a]
-        # print(f"Loss = {loss}")
-        # print(f"Delta = {delta}")
         return self.q[s, a] + self.alpha * (loss + delta)
-    
 
-    def train_episode(self, data):
-        state = self.env.reset(energy_df=data)
+    def train_episode(self, start_idx):
+        state = self.env.reset(start_idx)
         is_done = False
         episode_losses = []
-        n_steps = 0
 
         while not is_done:
-            action = self.choose_action(self.q, state)
+            curr_latency = self.env.get_latency()
+            action = self.choose_action(self.q, state, curr_latency)
             next_state, loss, is_done = self.env.step(action)
 
             self.q[state, action] = self.update_q_value(state, action, loss, next_state)
 
             episode_losses.append(loss)
-            n_steps += 1
             state = next_state
 
-        return episode_losses, n_steps
+        return episode_losses, self.env.time
+    
+    def reset(self):
+        self.q = np.random.rand(self.env.nS, self.env.nA) 

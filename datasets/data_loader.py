@@ -5,6 +5,7 @@ import pickle
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import numpy as np
+import seaborn as sns
 from numpy import random
 from pathlib import Path
 
@@ -46,20 +47,6 @@ class DataLoader():
         col = 'carbon_intensity'
         self.data['normalized'] = np.interp(df[col], (df[col].min(), df[col].max()), (0, 1)) 
 
-    def losses_to_intensity(self, losses):
-        """
-        Converts a list of normalized losses to the original carbon intensity metric.
-
-        This function is useful for reporting, whereas 0-1 losses are needed for training.
-        """
-        intensity = 0
-        print("-------- CONVERTING -------")
-        for l in losses:
-            # FIXME: is .iloc[0] really needed?
-            print(f"Loss = {l}")
-            intensity += self.data[self.data['normalized'] == l]['carbon_intensity'].iloc[0]
-        return intensity
-
     def get_n_samples(self, hourly_window, num_samples):
         """
         Returns: list of samples
@@ -69,6 +56,18 @@ class DataLoader():
             s = self.sample_range(hourly_window)
             samples.append(s)
         return samples
+    
+    def split_data(self, train_size):
+        """
+        train_size must be a percentage 
+        """
+        data = self.data
+
+        split_idx = int(len(data) * train_size)
+        train_df = data.iloc[:split_idx]    # First % for training
+        val_df = data.iloc[split_idx:]      # Last (1 - %) for validation
+        return train_df, val_df
+
                 
     def sample_range(self, hourly_window):
         nrows = range(self.data.shape[0])
@@ -148,17 +147,22 @@ class DataLoader():
         return opt_df, opt_ci, sub_df, sub_ci
     
     def plot_hist(self):
+        sns.set_theme(style="darkgrid")
+        
         col = 'carbon_intensity'
-        plt.hist(self.data[col],
-                 bins=100,
-                 density=True,
-                 color='royalblue',
-                 edgecolor='black',
-                 alpha=0.8)
+        sns.histplot(
+            self.data[col],
+            bins = 100,
+            stat = 'density',
+            # color = 'royalblue',
+            # edgecolor = 'black',
+            alpha = 0.8
+        )
+        sns.kdeplot(self.data[col]) # Plot density line
         
         mean = self.data[col].mean()
         std = self.data[col].std()
-        plt.axvline(mean, color='darkred', linestyle='solid', linewidth=1.2, label="Mean")
+        plt.axvline(mean, color='darkred', linestyle='solid', linewidth=1.5, label="Mean")
         plt.axvline(mean + std, color='darkgreen', linestyle='solid', linewidth=1.2, label="± SD")
         plt.axvline(mean - std, color='darkgreen', linestyle='solid', linewidth=1.2)
 
@@ -168,6 +172,7 @@ class DataLoader():
         min_date = pd.Timestamp(self.data['date'].min()).strftime('%d/%m/%Y')
         max_date = pd.Timestamp(self.data['date'].max()).strftime('%d/%m/%Y')
         plt.title(f"Distribution of Carbon Intensities from {min_date} to {max_date}")
+        
         plt.tight_layout()
         plt.legend()
         plt.show()

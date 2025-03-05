@@ -5,54 +5,147 @@ import matplotlib.pyplot as plt
 from tqdm.auto import tqdm
 import numpy as np
 import argparse
-
+import seaborn as sns
+import pandas as pd
 
 class Simulator():
-    def __init__(self, alg, job_size, deadline, episodes, seed=None):
+    def __init__(self, algs, job_size, episodes, latency, iterations, verbose, seed=None):
+        self.seed = np.random.randint(0, 2**36 - 1) if seed is None else seed
+        
         self.energy = DataLoader(seed=seed)
-
-        mdp = JobMDP(job_size)
-        if alg == "ql":
-            self.alg = QLearn(mdp)
-        elif alg == "informed-ql":
-            self.alg = InformedQL(mdp)
-        elif alg == "linq":
-            state_dim = 2
-            action_dim = 2
-            self.alg = LinearQ(mdp, state_dim=state_dim, action_dim=action_dim)
-
         self.job_size = job_size
-        self.deadline = deadline
         self.episodes = episodes
-        self.samples = self.energy.get_n_samples(deadline, episodes)
+        self.latency = latency
+        self.iterations = iterations
+        self.verbose = verbose
 
+        self.train_data, self.val_data = self.energy.split_data(train_size=0.8)
         self.losses = []
 
-    def train(self):
-        for _ in tqdm(range(self.episodes)):
-            data = self.samples[0]
-            episode_losses, _ = self.alg.train_episode(data)
-            self.losses.append(np.sum(episode_losses))
+        mdp = JobMDP(job_size, self.train_data)
+        self.algs = {}
+        for a in algs:
+            self.algs[a] = self.create_alg(a, mdp)
 
-    def plot_losses(self, title=""):
-        plt.plot(self.losses)
-        plt.title(title)
+        self.losses = np.empty((len(self.algs), self.iterations, self.episodes))
+
+    def create_alg(self, alg_name, env):
+        if alg_name == "ql":
+            title = "Q-Learning"
+            algorithm = QLearn(env, latency=self.latency)
+        elif alg_name == "iql":
+            title = "Informed Q-Learning"
+            algorithm = InformedQL(env, latency=self.latency)
+        elif alg_name == "linq":
+            title = "Linear Q-Learning"
+            state_dim = 2
+            action_dim = 2
+            algorithm = LinearQ(env, state_dim=state_dim, action_dim=action_dim, latency=self.latency)
+
+        return {'title': title, 'alg': algorithm}
+
+    def train(self):
+        for alg_i, (_, alg_dict) in enumerate(self.algs.items()):
+            print(f"[{alg_dict['title']}] Begin on {self.episodes} episodes...")
+
+            for iter in range(self.iterations):
+                if self.verbose: print(f"Iteration {iter}")
+
+                # TODO: This may need to change in the future. We'll need Q/w values for performance testing.
+                alg_dict['alg'].reset() # Reset the algorithm for the given iteration
+
+                episodes = tqdm(range(self.episodes)) if self.verbose else range(self.episodes)
+                for ep_i in episodes:
+                    start_idx = np.random.randint(len(self.train_data))
+                    episode_losses, _ = alg_dict['alg'].train_episode(start_idx)
+                    self.losses[alg_i][iter][ep_i] = np.sum(episode_losses)
+
+            if self.verbose: print(f"[{alg_dict['title']}] End")
+
+        self.losses = np.array([np.mean(self.losses[alg_i], axis=0) for alg_i in range(len(self.algs))])
+
+    def plot_losses(self):
+        sns.set_theme(style="darkgrid")
+        plt.figure(figsize=(10, 6))
+        palette = sns.color_palette("mako_r", n_colors=len(self.algs))
+        palette = sns.color_palette("tab10", n_colors=len(self.algs))
+        
+        for alg_i, alg_dict in enumerate(self.algs.values()):
+            window_size = 500
+            rolling = pd.Series(self.losses[alg_i]).rolling(window=window_size, min_periods=1)
+            smoothed_losses = rolling.mean()
+            std_dev_losses = rolling.std()
+            sns.lineplot(
+                smoothed_losses,
+                label=f'{alg_dict['title']} average (window = {window_size})',
+                color = palette[alg_i],
+                zorder = 2
+            )
+
+            min_episode = 0
+            episodes = np.arange(min_episode, min_episode + len(self.losses[alg_i]))
+            plt.fill_between(
+                episodes,
+                smoothed_losses - std_dev_losses,
+                smoothed_losses + std_dev_losses,
+                color = palette[alg_i],
+                alpha = 0.5,
+                label = '±1 Std Dev',
+                zorder = 1
+            )
+
+        if len(self.algs.keys()) == 1:
+            # FIXME: This is pretty nasty
+            title = f"Carbon Intensities from {list(self.algs.values())[0]['title']} on a {self.job_size}-State MDP" 
+        else:
+            title = f"Carbon Intensities from algorithms on a {self.job_size}-State MDP"
+            # title = f"[{', '.join(alg_dict['title'] for alg_dict in self.algs.values())}] Training with Seed {self.seed}"
+
+        plt.title(title, fontsize=14)
+        plt.ylabel("Normalized Carbon Intensity", fontsize=12)
+        plt.xlabel("# Episodes", fontsize=12)
+        plt.legend(loc="best", fontsize=10)
         plt.show()
 
 
+def str_to_bool(value):
+    if value.lower() in ['true', '1', 't', 'y', 'yes']:
+        return True
+    elif value.lower() in ['false', '0', 'f', 'n', 'no']:
+        return False
+    else:
+        raise argparse.ArgumentTypeError("Boolean value expected.")
+
 if __name__ == "__main__":
+    # Defaults
     job_size = 10
-    deadline = 48 # hours
+    latency = 1
     episodes = 100000
 
+    existing_algs = ['ql', 'iql', 'linq']
+
     parser = argparse.ArgumentParser(description="Run simulator with a specified algorithm.")
-    parser.add_argument("algorithm", type=str, help="Algorithm to run. Options: ql, informed-ql, linq")
+    parser.add_argument("algorithms", nargs="*", help=f"Algorithm to run. Options: {", ".join(existing_algs)}")
     parser.add_argument("-e", "--episodes", type=int, default=episodes, help="Number of episodes to train on")
     parser.add_argument("-j", "--job-size", type=int, default=job_size, help="Size of a job")
-    parser.add_argument("-d", "--deadline", type=int, default=deadline, help="Deadline jobs must complete by")
+    parser.add_argument("-l", "--latency", type=int, default=latency, help="Amount of latency we're willing to incur. Latency=0 means no latency. Latency=1 effectively doubles runtime")
+    parser.add_argument("-i", "--iterations", type=int, default=1,help="Number of iterations to run training over. Results are averaged.")
+
     parser.add_argument("-s", "--seed", type=int, help="Defines a seed. Useful for reproduction.")
+    parser.add_argument("-v", "--verbose", type=str_to_bool, default=True, help="Sets whether training information should be displayed.")
+
     args = parser.parse_args()
 
-    sim = Simulator(args.algorithm, args.job_size, args.deadline, args.episodes, args.seed)
+    assert args.algorithms != [], argparse.ArgumentTypeError("Algorithm is required. See help for details.")
+    for a in args.algorithms:
+        assert a in existing_algs, argparse.ArgumentError(f"Algorithm {a} cannot be handled.")
+            
+    sim = Simulator(args.algorithms,
+                    args.job_size, 
+                    args.episodes,
+                    args.latency,
+                    args.iterations,
+                    args.verbose,
+                    args.seed)
     sim.train()
-    sim.plot_losses(title=args.algorithm)
+    sim.plot_losses()
