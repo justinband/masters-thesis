@@ -73,7 +73,7 @@ class Simulator():
             window_size = 500
             rolling = pd.Series(self.losses[alg_i]).rolling(window=window_size, min_periods=1)
             smoothed_losses = rolling.mean()
-            std_dev_losses = rolling.std()
+            std_dev_losses = rolling.std().fillna(0) # fillna needed for when in pos 0 and no other data for std calc
             sns.lineplot(
                 smoothed_losses,
                 label=f'{alg_dict['title']} average (window = {window_size})',
