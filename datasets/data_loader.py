@@ -5,6 +5,7 @@ import pickle
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import numpy as np
+import seaborn as sns
 from numpy import random
 from pathlib import Path
 
@@ -146,17 +147,22 @@ class DataLoader():
         return opt_df, opt_ci, sub_df, sub_ci
     
     def plot_hist(self):
+        sns.set_theme(style="darkgrid")
+        
         col = 'carbon_intensity'
-        plt.hist(self.data[col],
-                 bins=100,
-                 density=True,
-                 color='royalblue',
-                 edgecolor='black',
-                 alpha=0.8)
+        sns.histplot(
+            self.data[col],
+            bins = 100,
+            stat = 'density',
+            # color = 'royalblue',
+            # edgecolor = 'black',
+            alpha = 0.8
+        )
+        sns.kdeplot(self.data[col]) # Plot density line
         
         mean = self.data[col].mean()
         std = self.data[col].std()
-        plt.axvline(mean, color='darkred', linestyle='solid', linewidth=1.2, label="Mean")
+        plt.axvline(mean, color='darkred', linestyle='solid', linewidth=1.5, label="Mean")
         plt.axvline(mean + std, color='darkgreen', linestyle='solid', linewidth=1.2, label="± SD")
         plt.axvline(mean - std, color='darkgreen', linestyle='solid', linewidth=1.2)
 
@@ -166,6 +172,7 @@ class DataLoader():
         min_date = pd.Timestamp(self.data['date'].min()).strftime('%d/%m/%Y')
         max_date = pd.Timestamp(self.data['date'].max()).strftime('%d/%m/%Y')
         plt.title(f"Distribution of Carbon Intensities from {min_date} to {max_date}")
+        
         plt.tight_layout()
         plt.legend()
         plt.show()
