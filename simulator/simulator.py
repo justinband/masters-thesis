@@ -31,16 +31,13 @@ class Simulator():
         self.max_time = 0
 
     def _create_alg(self, alg_name, env):
-        if alg_name == "ql":
-            title = "Q-Learning"
-            algorithm = QLearn(env, latency=self.latency)
-        elif alg_name == "iql":
-            title = "Informed Q-Learning"
-            algorithm = InformedQL(env, latency=self.latency)
-        elif alg_name == "linq":
-            title = "Linear Q-Learning"
-            algorithm = LinearQ(env, latency=self.latency)
-
+        alg_map = {
+            "ql": ("Q-Learning", QLearn),
+            "iql": ("Informed Q-Learning", InformedQL),
+            "linq": ("Linear Q-Learning", LinearQ),
+        }
+        title, algorithm_class = alg_map.get(alg_name)
+        algorithm = algorithm_class(env, latency=self.latency)
         return {'title': title, 'alg': algorithm}
 
     def train(self):
@@ -50,7 +47,8 @@ class Simulator():
             iter_latencies = []
 
             for iter in range(self.iterations):
-                if self.verbose: print(f"Iteration {iter}")
+                if self.verbose: 
+                    print(f"Iteration {iter}")
 
                 # TODO: This may need to change in the future. We'll need Q/w values for performance testing.
                 alg_dict['alg'].reset() # Reset the algorithm for the given iteration
@@ -61,7 +59,6 @@ class Simulator():
 
                 for ep_i in episodes:
                     start_idx = np.random.randint(len(self.train_data))
-
                     episode_losses, episode_latencies, ep_time = alg_dict['alg'].train_episode(start_idx)
 
                     ### Trackers
@@ -72,17 +69,17 @@ class Simulator():
                         self.max_time = ep_time
                     
 
-                # Pad latencies by longest episode for current iteration
+                # Pad latencies for current iteration
                 padded_latencies = np.array([
                     np.pad(ep, (0, (self.max_time + 1) - len(ep)), constant_values=np.nan)
                     for ep in latencies
                 ])
-                # Store avg latency over episodes for this iteration
                 iter_latencies.append(np.nanmean(padded_latencies, axis=0))
 
-            if self.verbose: print(f"[{alg_dict['title']}] End")
+            if self.verbose:
+                print(f"[{alg_dict['title']}] End")
 
-            # For each iteration, pad!
+            # Store padded latencies
             self.latencies[alg_i] = np.array([
                 np.pad(i, (0, (self.max_time + 1) - len(i)), constant_values=np.nan)
                 for i in iter_latencies
@@ -141,7 +138,6 @@ class Simulator():
         plt.figure(figsize=(10, 6))
 
         for alg_i, alg_dict in enumerate(self.algs.values()):
-            print(self.latencies[alg_i].shape)
             plt.plot(self.latencies[alg_i], label=f'{alg_dict['title']} average latency')
 
         plt.title("Latencies", fontsize=14)
