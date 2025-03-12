@@ -25,9 +25,12 @@ class QLearn(LearningAlg):
         state = self.env.reset(start_idx)
         is_done = False
         episode_losses = []
+        episode_latencies = []
 
         while not is_done:
             curr_latency = self.env.get_latency()
+            episode_latencies.append(curr_latency)
+
             action = self.choose_action(self.q, state, curr_latency)
             next_state, loss, is_done = self.env.step(action)
 
@@ -36,7 +39,7 @@ class QLearn(LearningAlg):
             episode_losses.append(loss)
             state = next_state
 
-        return episode_losses, self.env.time
+        return episode_losses, episode_latencies, self.env.time
     
     def reset(self):
         self.q = np.random.rand(self.env.nS, self.env.nA) 

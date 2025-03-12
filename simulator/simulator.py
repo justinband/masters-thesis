@@ -24,11 +24,13 @@ class Simulator():
         mdp = JobMDP(job_size, self.train_data)
         self.algs = {}
         for a in algs:
-            self.algs[a] = self.create_alg(a, mdp)
+            self.algs[a] = self._create_alg(a, mdp)
 
         self.losses = np.empty((len(self.algs), self.iterations, self.episodes))
+        self.latencies = np.empty((len(self.algs)), dtype=object)
+        self.max_time = 0
 
-    def create_alg(self, alg_name, env):
+    def _create_alg(self, alg_name, env):
         if alg_name == "ql":
             title = "Q-Learning"
             algorithm = QLearn(env, latency=self.latency)
@@ -37,9 +39,7 @@ class Simulator():
             algorithm = InformedQL(env, latency=self.latency)
         elif alg_name == "linq":
             title = "Linear Q-Learning"
-            state_dim = 2
-            action_dim = 2
-            algorithm = LinearQ(env, state_dim=state_dim, action_dim=action_dim, latency=self.latency)
+            algorithm = LinearQ(env, latency=self.latency)
 
         return {'title': title, 'alg': algorithm}
 
@@ -47,21 +47,50 @@ class Simulator():
         for alg_i, (_, alg_dict) in enumerate(self.algs.items()):
             print(f"[{alg_dict['title']}] Begin on {self.episodes} episodes...")
 
+            iter_latencies = []
+
             for iter in range(self.iterations):
                 if self.verbose: print(f"Iteration {iter}")
 
                 # TODO: This may need to change in the future. We'll need Q/w values for performance testing.
                 alg_dict['alg'].reset() # Reset the algorithm for the given iteration
 
+                ### Episode Loop
                 episodes = tqdm(range(self.episodes)) if self.verbose else range(self.episodes)
+                latencies = []
+
                 for ep_i in episodes:
                     start_idx = np.random.randint(len(self.train_data))
-                    episode_losses, _ = alg_dict['alg'].train_episode(start_idx)
+
+                    episode_losses, episode_latencies, ep_time = alg_dict['alg'].train_episode(start_idx)
+
+                    ### Trackers
                     self.losses[alg_i][iter][ep_i] = np.sum(episode_losses)
+                    latencies.append(episode_latencies)
+
+                    if ep_time > self.max_time:
+                        self.max_time = ep_time
+                    
+
+                # Pad latencies by longest episode for current iteration
+                padded_latencies = np.array([
+                    np.pad(ep, (0, (self.max_time + 1) - len(ep)), constant_values=np.nan)
+                    for ep in latencies
+                ])
+                # Store avg latency over episodes for this iteration
+                iter_latencies.append(np.nanmean(padded_latencies, axis=0))
 
             if self.verbose: print(f"[{alg_dict['title']}] End")
 
+            # For each iteration, pad!
+            self.latencies[alg_i] = np.array([
+                np.pad(i, (0, (self.max_time + 1) - len(i)), constant_values=np.nan)
+                for i in iter_latencies
+            ])
+        
+        # Average over iterations
         self.losses = np.array([np.mean(self.losses[alg_i], axis=0) for alg_i in range(len(self.algs))])
+        self.latencies = np.array([np.nanmean(self.latencies[alg_i], axis=0) for alg_i in range(len(self.algs))])
 
     def plot_losses(self):
         sns.set_theme(style="darkgrid")
@@ -104,4 +133,23 @@ class Simulator():
         plt.ylabel("Normalized Carbon Intensity", fontsize=12)
         plt.xlabel("# Episodes", fontsize=12)
         plt.legend(loc="best", fontsize=10)
+        # plt.show()
+
+
+    def plot_latency(self):
+        sns.set_theme(style='darkgrid')
+        plt.figure(figsize=(10, 6))
+
+        for alg_i, alg_dict in enumerate(self.algs.values()):
+            print(self.latencies[alg_i].shape)
+            plt.plot(self.latencies[alg_i], label=f'{alg_dict['title']} average latency')
+
+        plt.title("Latencies", fontsize=14)
+        plt.ylabel("Average Latency")
+        plt.xlabel("Time", fontsize=12)
+        plt.legend(loc="best", fontsize=10)
         plt.show()
+
+        # Plot carbon intensity over time
+
+        # Plot latency over time, averaged over each episode

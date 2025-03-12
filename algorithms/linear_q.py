@@ -29,10 +29,9 @@ class LinearQ(LearningAlg):
         return out_state
     
     def choose_action(self, state, curr_latency):
-        # if (self.max_latency == 0) or (curr_latency >= self.max_latency):
-        #     return self.env.run
-        
-        if np.random.rand() < self.epsilon:
+        if (self.max_latency == 0) or (curr_latency >= self.max_latency):
+            return self.env.run
+        elif np.random.rand() < self.epsilon:
             return np.random.choice(self.action_dim)
         else:
             q_vals = np.dot(self.w, state)
@@ -49,13 +48,16 @@ class LinearQ(LearningAlg):
         progress = self.env.reset(start_idx)
         is_done = False
         episode_losses = []
+        episode_latencies = []
         
         intensity_q = deque(maxlen=2)
 
         while not is_done:
             # Get State
-            curr_intensity = self.env.get_loss()
             curr_latency = self.env.get_latency()
+            episode_latencies.append(curr_latency)
+
+            curr_intensity = self.env.get_loss()
             intensity_q.append(curr_intensity) # Add curr intensity to Queue
 
             state = self.create_state(progress, intensity_q, curr_latency)
@@ -74,7 +76,7 @@ class LinearQ(LearningAlg):
             episode_losses.append(loss)
             progress = s_prime
 
-        return episode_losses, self.env.time
+        return episode_losses, episode_latencies, self.env.time
     
     def reset(self):
         self.w = np.zeros((self.action_dim, self.state_dim))

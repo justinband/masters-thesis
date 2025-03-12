@@ -7,11 +7,13 @@ class InformedQL(QLearn):
     def train_episode(self, start_idx):
         state = self.env.reset(start_idx)
         is_done = False
-        episdoe_losses = []
+        episode_losses = []
+        episode_latencies = []
 
         while not is_done:
             # (0) get latency
             curr_latency = self.env.get_latency()
+            episode_latencies.append(curr_latency)
 
             # (1) observe the next state
             s_prime = self.env.get_next_state()
@@ -35,9 +37,9 @@ class InformedQL(QLearn):
             self.q[state, action] = q_copy[state, action]
             
             # (6) Update counters
-            episdoe_losses.append(loss)
+            episode_losses.append(loss)
             state = next_state
 
-        return episdoe_losses, self.env.time
+        return episode_losses, episode_latencies, self.env.time
 
         
