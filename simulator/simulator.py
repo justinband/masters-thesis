@@ -28,6 +28,7 @@ class Simulator():
 
         self.losses = np.empty((len(self.algs), self.iterations, self.episodes))
         self.latencies = np.empty((len(self.algs)), dtype=object)
+        self.intensities = np.empty((len(self.algs)), dtype=object)
         self.max_time = 0
 
     def _create_alg(self, alg_name, env):
@@ -39,12 +40,19 @@ class Simulator():
         title, algorithm_class = alg_map.get(alg_name)
         algorithm = algorithm_class(env, latency=self.latency)
         return {'title': title, 'alg': algorithm}
+    
+    def _pad_data(self, data, max_length):
+        return np.array([
+            np.pad(item, (0, max_length - len(item)), constant_values=np.nan)
+            for item in data
+        ])
 
     def train(self):
         for alg_i, (_, alg_dict) in enumerate(self.algs.items()):
             print(f"[{alg_dict['title']}] Begin on {self.episodes} episodes...")
 
             iter_latencies = []
+            iter_intensities = []
 
             for iter in range(self.iterations):
                 if self.verbose: 
@@ -56,38 +64,39 @@ class Simulator():
                 ### Episode Loop
                 episodes = tqdm(range(self.episodes)) if self.verbose else range(self.episodes)
                 latencies = []
+                intensities = []
 
                 for ep_i in episodes:
                     start_idx = np.random.randint(len(self.train_data))
-                    episode_losses, episode_latencies, ep_time = alg_dict['alg'].train_episode(start_idx)
+                    episode_losses, episode_latencies, ep_intensities, ep_time = alg_dict['alg'].train_episode(start_idx)
 
                     ### Trackers
                     self.losses[alg_i][iter][ep_i] = np.sum(episode_losses)
                     latencies.append(episode_latencies)
+                    intensities.append(ep_intensities)
 
                     if ep_time > self.max_time:
                         self.max_time = ep_time
                     
 
                 # Pad latencies for current iteration
-                padded_latencies = np.array([
-                    np.pad(ep, (0, (self.max_time + 1) - len(ep)), constant_values=np.nan)
-                    for ep in latencies
-                ])
+                padded_latencies = self._pad_data(latencies, self.max_time + 1)
                 iter_latencies.append(np.nanmean(padded_latencies, axis=0))
+
+                padded_intensities = self._pad_data(intensities, self.max_time + 1)
+                iter_intensities.append(np.nanmean(padded_intensities, axis=0))
 
             if self.verbose:
                 print(f"[{alg_dict['title']}] End")
 
             # Store padded latencies
-            self.latencies[alg_i] = np.array([
-                np.pad(i, (0, (self.max_time + 1) - len(i)), constant_values=np.nan)
-                for i in iter_latencies
-            ])
+            self.latencies[alg_i] = self._pad_data(iter_latencies, self.max_time + 1)
+            self.intensities[alg_i] = self._pad_data(iter_intensities, self.max_time + 1)
         
         # Average over iterations
         self.losses = np.array([np.mean(self.losses[alg_i], axis=0) for alg_i in range(len(self.algs))])
         self.latencies = np.array([np.nanmean(self.latencies[alg_i], axis=0) for alg_i in range(len(self.algs))])
+        self.intensities = np.array([np.nanmean(self.intensities[alg_i], axis=0) for alg_i in range(len(self.algs))])
 
     def plot_losses(self):
         sns.set_theme(style="darkgrid")
@@ -135,13 +144,22 @@ class Simulator():
 
     def plot_latency(self):
         sns.set_theme(style='darkgrid')
-        plt.figure(figsize=(10, 6))
+        fig, ax1 = plt.subplots()
+        ax2 = ax1.twinx()
+
+        # Plot Latency
+        for alg_i, alg_dict in enumerate(self.algs.values()):
+            ax1.plot(self.latencies[alg_i], label=f'{alg_dict['title']} Latency', color='red')
 
         for alg_i, alg_dict in enumerate(self.algs.values()):
-            plt.plot(self.latencies[alg_i], label=f'{alg_dict['title']} average latency')
+            ax2.plot(self.intensities[alg_i], label=f'{alg_dict['title']} CI', color='blue')
+            
+        ax1.set_ylabel("Average Latency")
+        ax1.legend(loc="best")
+        ax2.set_ylabel("Carbon Intensity")
+        ax2.legend(loc="best")
 
         plt.title("Latencies", fontsize=14)
-        plt.ylabel("Average Latency")
         plt.xlabel("Time", fontsize=12)
         plt.legend(loc="best", fontsize=10)
         plt.show()

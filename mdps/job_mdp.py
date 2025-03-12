@@ -43,6 +43,12 @@ class JobMDP():
             
         return latency
     
+    def get_intensity(self, normalized=False):
+        if normalized:
+            return self.energy['normalized'].iloc[self.idx]
+        else:
+            return self.energy['carbon_intensity'].iloc[self.idx]
+    
     def get_loss(self, a=None):
         if (a is not None) and (a == self.pause): # Get latency on pause action
             return self.get_latency()

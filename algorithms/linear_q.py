@@ -49,6 +49,7 @@ class LinearQ(LearningAlg):
         is_done = False
         episode_losses = []
         episode_latencies = []
+        episode_intensities = []
         
         intensity_q = deque(maxlen=2)
 
@@ -59,6 +60,7 @@ class LinearQ(LearningAlg):
 
             curr_intensity = self.env.get_loss()
             intensity_q.append(curr_intensity) # Add curr intensity to Queue
+            episode_intensities.append(self.env.get_intensity())
 
             state = self.create_state(progress, intensity_q, curr_latency)
             # state = self.create_state(progress, curr_intensity, prev_intensity)
@@ -76,7 +78,7 @@ class LinearQ(LearningAlg):
             episode_losses.append(loss)
             progress = s_prime
 
-        return episode_losses, episode_latencies, self.env.time
+        return episode_losses, episode_latencies, episode_intensities, self.env.time
     
     def reset(self):
         self.w = np.zeros((self.action_dim, self.state_dim))
