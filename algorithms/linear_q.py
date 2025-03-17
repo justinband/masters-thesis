@@ -1,4 +1,7 @@
 import numpy as np
+import os
+import pickle
+from pathlib import Path
 from algorithms import LearningAlg
 from scipy.stats import linregress
 from collections import deque
@@ -44,7 +47,7 @@ class LinearQ(LearningAlg):
         # error = loss - curr_q
         self.w[action] += self.alpha * error * state
 
-    def train_episode(self, start_idx):
+    def run_episode(self, start_idx, train: bool):
         progress = self.env.reset(start_idx)
         is_done = False
         episode_losses = []
@@ -72,13 +75,23 @@ class LinearQ(LearningAlg):
             s_prime, loss, is_done = self.env.step(action)
 
             # Update the weights
-            self.update_weights(state, action, loss, s_prime)
+            if train:
+                self.update_weights(state, action, loss, s_prime)
 
             # Update tracking
             episode_losses.append(loss)
             progress = s_prime
 
         return episode_losses, episode_latencies, episode_intensities, self.env.time
+
+    def save_weights(self, path=None):
+        DATA_DIR = Path(__file__).parent
+        if path:
+            DATA_DIR = path
+        
+        filename = os.path.join(DATA_DIR, "linq_weights.pkl")
+        with open(filename, 'wb') as f:
+            pickle.dump(self.w, f)
     
     def reset(self):
         self.w = np.zeros((self.action_dim, self.state_dim))

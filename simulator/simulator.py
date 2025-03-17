@@ -27,6 +27,8 @@ class Simulator():
             self.algs[a] = self._create_alg(a, mdp)
 
         self.losses = np.empty((len(self.algs), self.iterations, self.episodes))
+        self.optimal_losses = np.empty((len(self.algs), self.episodes))
+
         self.latencies = np.empty((len(self.algs)), dtype=object)
         self.intensities = np.empty((len(self.algs)), dtype=object)
         self.max_time = 0
@@ -42,8 +44,13 @@ class Simulator():
         return {'title': title, 'alg': algorithm}
     
     def _pad_data(self, data, max_length):
+        """
+        Data represents a list of episodes.
+
+        Each episode contains a list of carbon intensities or latencies.
+        """
         return np.array([
-            np.pad(item, (0, max_length - len(item)), constant_values=np.nan)
+            np.pad(item, (0, max_length - len(item)), constant_values=item[-1])
             for item in data
         ])
 
@@ -68,16 +75,20 @@ class Simulator():
 
                 for ep_i in episodes:
                     start_idx = np.random.randint(len(self.train_data))
-                    episode_losses, episode_latencies, ep_intensities, ep_time = alg_dict['alg'].train_episode(start_idx)
+                    episode_losses, episode_latencies, ep_intensities, ep_time = alg_dict['alg'].run_episode(start_idx, train=True)
 
                     ### Trackers
                     self.losses[alg_i][iter][ep_i] = np.sum(episode_losses)
                     latencies.append(episode_latencies)
                     intensities.append(ep_intensities)
 
+                    ep_intensities.sort()
+                    optimal_loss = np.sum(ep_intensities[:self.job_size])
+                    self.optimal_losses[alg_i, ep_i] = optimal_loss
+                      
                     if ep_time > self.max_time:
                         self.max_time = ep_time
-                    
+
 
                 # Pad latencies for current iteration
                 padded_latencies = self._pad_data(latencies, self.max_time + 1)
@@ -109,6 +120,9 @@ class Simulator():
             rolling = pd.Series(self.losses[alg_i]).rolling(window=window_size, min_periods=1)
             smoothed_losses = rolling.mean()
             std_dev_losses = rolling.std().fillna(0) # fillna needed for when in pos 0 and no other data for std calc
+
+            # plt.plot(self.optimal_losses[alg_i], label='optimal', color='red')
+
             sns.lineplot(
                 smoothed_losses,
                 label=f'{alg_dict['title']} average (window = {window_size})',
@@ -139,7 +153,7 @@ class Simulator():
         plt.ylabel("Normalized Carbon Intensity", fontsize=12)
         plt.xlabel("# Episodes", fontsize=12)
         plt.legend(loc="best", fontsize=10)
-        # plt.show()
+        plt.show()
 
 
     def plot_latency(self):
@@ -149,10 +163,10 @@ class Simulator():
 
         # Plot Latency
         for alg_i, alg_dict in enumerate(self.algs.values()):
-            ax1.plot(self.latencies[alg_i], label=f'{alg_dict['title']} Latency', color='red')
+            ax1.plot(self.latencies[alg_i], label=f'Latency', color='red')
 
         for alg_i, alg_dict in enumerate(self.algs.values()):
-            ax2.plot(self.intensities[alg_i], label=f'{alg_dict['title']} CI', color='blue')
+            ax2.plot(self.intensities[alg_i], label=f'CI', color='blue')
             
         ax1.set_ylabel("Average Latency")
         ax1.legend(loc="best")

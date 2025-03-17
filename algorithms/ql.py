@@ -21,7 +21,7 @@ class QLearn(LearningAlg):
         delta = np.min(self.q[s_prime]) - self.q[s, a]
         return self.q[s, a] + self.alpha * (loss + delta)
 
-    def train_episode(self, start_idx):
+    def run_episode(self, start_idx, train: bool):
         state = self.env.reset(start_idx)
         is_done = False
         episode_losses = []
@@ -38,7 +38,8 @@ class QLearn(LearningAlg):
             action = self.choose_action(self.q, state, curr_latency)
             next_state, loss, is_done = self.env.step(action)
 
-            self.q[state, action] = self.update_q_value(state, action, loss, next_state)
+            if train:
+                self.q[state, action] = self.update_q_value(state, action, loss, next_state)
 
             episode_losses.append(loss)
             state = next_state

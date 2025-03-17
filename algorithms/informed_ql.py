@@ -4,7 +4,7 @@ class InformedQL(QLearn):
     def __init__(self, env, epsilon = 0.1, alpha = 1e-6, latency=0):
         super().__init__(env, epsilon, alpha, latency)
 
-    def train_episode(self, start_idx):
+    def run_episode(self, start_idx, train: bool):
         state = self.env.reset(start_idx)
         is_done = False
         episode_losses = []
@@ -28,11 +28,13 @@ class InformedQL(QLearn):
             losses = [pause_loss, run_loss]
 
             # (3) Copy and Update Q-Values given some context
-            q_copy = self.q.copy()
-            for (a, l) in zip(actions, losses):
-                q_copy[state, a] = self.update_q_value(state, a, l, s_prime)
+            if train:
+                q_copy = self.q.copy()
+                for (a, l) in zip(actions, losses):
+                    q_copy[state, a] = self.update_q_value(state, a, l, s_prime)
             
             # (4) Choose action based on updated context and current state
+            # FIXME: When not training q_copy does not exist!
             action = self.choose_action(q_copy, state, curr_latency)
             next_state, loss, is_done = self.env.step(action)
 
