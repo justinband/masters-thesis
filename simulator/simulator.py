@@ -74,20 +74,19 @@ class Simulator():
                 intensities = []
 
                 for ep_i in episodes:
-                    start_idx = np.random.randint(len(self.train_data))
-                    episode_losses, episode_latencies, ep_intensities, ep_time = alg_dict['alg'].run_episode(start_idx, train=True)
+                    start_idx = np.random.randint(len(self.train_data)) # random starting position in the energy
+                    ep_losses, ep_latencies, ep_intensities, ep_time = alg_dict['alg'].run_episode(start_idx, train=True)
+
+                    if ep_time > self.max_time: # update max time, used for padding
+                        self.max_time = ep_time
 
                     ### Trackers
-                    self.losses[alg_i][iter][ep_i] = np.sum(episode_losses)
-                    latencies.append(episode_latencies)
-                    intensities.append(ep_intensities)
+                    self.losses[alg_i][iter][ep_i] = np.sum(ep_losses)
+                    latencies.append(ep_latencies.copy()) # add episode latencies
+                    intensities.append(ep_intensities.copy()) # add episode intensities
 
                     ep_intensities.sort()
-                    optimal_loss = np.sum(ep_intensities[:self.job_size])
-                    self.optimal_losses[alg_i, ep_i] = optimal_loss
-                      
-                    if ep_time > self.max_time:
-                        self.max_time = ep_time
+                    self.optimal_losses[alg_i, ep_i] = np.sum(ep_intensities[:self.job_size])
 
 
                 # Pad latencies for current iteration
