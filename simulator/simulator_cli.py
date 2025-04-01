@@ -47,4 +47,6 @@ if __name__ == "__main__":
                     args.seed)
     sim.train()
     sim.plot_losses()
+    sim.plot_regret()
+    sim.plot_latency()
     

@@ -44,16 +44,16 @@ class JobMDP():
         return latency
     
     def get_intensity(self, normalized=False):
-        if normalized:
-            return self.energy['normalized'].iloc[self.idx]
-        else:
-            return self.energy['carbon_intensity'].iloc[self.idx]
+        energy_type = 'normalized' if normalized else 'carbon_intensity'
+        return self.energy[energy_type].iloc[self.idx]
     
-    def get_loss(self, a=None):
+    def get_loss(self, a=None, normalized=False):
+        energy_type = 'normalized' if normalized else 'carbon_intensity'
+
         if (a is not None) and (a == self.pause): # Get latency on pause action
             return self.get_latency()
         else:
-            return self.energy['normalized'].iloc[self.idx]
+            return self.energy[energy_type].iloc[self.idx]
 
     def step(self, a):
         """
@@ -64,7 +64,7 @@ class JobMDP():
         if self.idx == len(self.energy) - 1: # Data wrap around
             self.idx = 0
 
-        self.curr_loss = self.get_loss(a)
+        self.curr_loss = self.get_loss(a, normalized=True)
 
         # Terminating Action - running in last state reaches terminal state
         if ((a == self.run) and (self.s == self.nS - 1)) or self.complete: # Terminal state
