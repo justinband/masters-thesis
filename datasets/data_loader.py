@@ -35,7 +35,7 @@ class DataLoader():
             df = df.rename(columns={"Datetime (UTC)": "date", "Carbon Intensity gCO₂eq/kWh (direct)": "carbon_intensity"})
             df = df.astype({'date': 'datetime64[ns]'})
             self.data = df.sort_values(by='date').reset_index(drop=True) # Sort by date
-            self.normalize_data()
+            self._normalize_data()
 
             with open(self.data_name, 'wb') as f: # Save data
                 pickle.dump(self.data, f)
@@ -46,6 +46,7 @@ class DataLoader():
         df = self.data
         col = 'carbon_intensity'
         self.data['normalized'] = np.interp(df[col], (df[col].min(), df[col].max()), (0, 1)) 
+        self.data['normalized'] = np.round(self.data['normalized'], 5) # Analysis in data_analysis.ipynb determined 5 decimals is okay
 
     def get_n_samples(self, hourly_window, num_samples):
         """
