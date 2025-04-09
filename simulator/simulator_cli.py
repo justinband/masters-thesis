@@ -17,8 +17,10 @@ def str_to_bool(value):
 if __name__ == "__main__":
     # Defaults
     job_size = 10
-    latency = 1
-    episodes = 100000
+    episodes = 1250
+    tradeoff = 0.05
+    normalize = True
+    lr = 1e-5
 
     existing_algs = ['ql', 'iql', 'linq']
 
@@ -26,8 +28,10 @@ if __name__ == "__main__":
     parser.add_argument("algorithms", nargs="*", help=f"Algorithm to run. Options: {", ".join(existing_algs)}")
     parser.add_argument("-e", "--episodes", type=int, default=episodes, help="Number of episodes to train on")
     parser.add_argument("-j", "--job-size", type=int, default=job_size, help="Size of a job")
-    parser.add_argument("-l", "--latency", type=int, default=latency, help="Amount of latency we're willing to incur. Latency=0 means no latency. Latency=1 effectively doubles runtime")
+    parser.add_argument("-t", "--tradeoff", type=float, default=tradeoff, help="Tradeoff of how long we're willing to wait for a solution. Higher means we can wait longer, lower means less.")
     parser.add_argument("-i", "--iterations", type=int, default=1,help="Number of iterations to run training over. Results are averaged.")
+    parser.add_argument("-n", "--normalize", type=str_to_bool, default=True, help="Uses normalized data in [0,1] when true, otherwise uses original data")
+    parser.add_argument("-lr", "--learning_rate", type=float, default=lr, help='Sets the learning rate.')
 
     parser.add_argument("-s", "--seed", type=int, help="Defines a seed. Useful for reproduction.")
     parser.add_argument("-v", "--verbose", type=str_to_bool, default=True, help="Sets whether training information should be displayed.")
@@ -41,12 +45,12 @@ if __name__ == "__main__":
     sim = Simulator(args.algorithms,
                     args.job_size, 
                     args.episodes,
-                    args.latency,
+                    args.tradeoff,
+                    args.learning_rate,
                     args.iterations,
                     args.verbose,
+                    args.normalize,
                     args.seed)
     sim.train()
     sim.plot_losses()
-    sim.plot_regret()
-    sim.plot_latency()
     

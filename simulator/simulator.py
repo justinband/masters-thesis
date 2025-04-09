@@ -1,6 +1,6 @@
 from datasets import DataLoader
-from mdps import JobMDP
-from algorithms import QLearn, InformedQL, LinearQ
+from mdps import JobEnv
+from algorithms import NewQLearn, InformedQL, LinearQ
 import matplotlib.pyplot as plt
 from tqdm.auto import tqdm
 import numpy as np
@@ -8,20 +8,23 @@ import seaborn as sns
 import pandas as pd
 
 class Simulator():
-    def __init__(self, algs, job_size, episodes, latency, iterations, verbose, seed=None):
+    def __init__(self, algs, job_size, episodes, tradeoff, learning_rate, iterations, verbose, normalized, seed=None):
         self.seed = np.random.randint(0, 2**36 - 1) if seed is None else seed
         
         self.energy = DataLoader(seed=seed)
         self.job_size = job_size
         self.episodes = episodes
-        self.latency = latency
+        self.tradeoff = tradeoff
+        self.lr = learning_rate
         self.iterations = iterations
         self.verbose = verbose
+        self.normalize = normalized
+        self.train_size = 0.8
 
-        self.train_data, self.val_data = self.energy.split_data(train_size=0.8)
+        # self.train_data, self.val_data = self.energy.split_data(train_size=0.8)
         self.losses = []
 
-        mdp = JobMDP(job_size, self.train_data)
+        mdp = JobEnv(job_size, self.energy.data, self.train_size)
         self.algs = {}
         for a in algs:
             self.algs[a] = self._create_alg(a, mdp)
@@ -29,21 +32,21 @@ class Simulator():
         self.losses = np.empty((len(self.algs), self.iterations, self.episodes))
         self.optimal_losses = np.empty((len(self.algs), self.episodes))
 
-        self.latencies = np.empty((len(self.algs)), dtype=object)
         self.intensities = np.empty((len(self.algs)), dtype=object)
         self.max_time = 0
 
         self.cum_regret = np.zeros((len(self.algs), self.episodes))
+        self.temp_cum_regret = np.zeros((len(self.algs), self.episodes))
         self.instant_regret = np.zeros((len(self.algs), self.episodes))
 
     def _create_alg(self, alg_name, env):
         alg_map = {
-            "ql": ("Q-Learning", QLearn),
+            "ql": ("Q-Learning", NewQLearn),
             "iql": ("Informed Q-Learning", InformedQL),
             "linq": ("Linear Q-Learning", LinearQ),
         }
         title, algorithm_class = alg_map.get(alg_name)
-        algorithm = algorithm_class(env, latency=self.latency)
+        algorithm = algorithm_class(env, lr=self.lr, tradeoff=self.tradeoff)
         return {'title': title, 'alg': algorithm}
     
     def _pad_data(self, data, max_length):
@@ -59,74 +62,46 @@ class Simulator():
 
     def train(self):
         for alg_i, (_, alg_dict) in enumerate(self.algs.items()):
-            print(f"[{alg_dict['title']}] Begin on {self.episodes} episodes...")
+            print(f"[{alg_dict['title']}] {self.episodes} episodes. LR = {self.lr}")
 
-            iter_latencies = []
             iter_intensities = []
 
             for iter in range(self.iterations):
                 if self.verbose: 
                     print(f"Iteration {iter}")
 
-                # TODO: This may need to change in the future. We'll need Q/w values for performance testing.
-                alg_dict['alg'].reset() # Reset the algorithm for the given iteration
-
                 ### Episode Loop
-                episodes = tqdm(range(self.episodes), mininterval=1.0) if self.verbose else range(self.episodes)
-                latencies = np.empty(self.episodes, dtype=object)
+                episodes = tqdm(range(self.episodes)) if self.verbose else range(self.episodes)
                 intensities = np.empty(self.episodes, dtype=object)
 
                 for ep_i in episodes:
-                    start_idx = np.random.randint(len(self.train_data)) # random starting position in the energy
-                    ep_loss, opt_loss, regret, ep_latencies, ep_intensities, ep_time = alg_dict['alg'].run_episode(start_idx, ep_i, train=True)
+                    # ep_loss, opt_loss, regret, ep_intensities, ep_time = alg_dict['alg'].run_episode(start_idx, ep_i, train=True)
+                    ep_loss, ep_carbon, opt_carbon, ep_time = alg_dict['alg'].train_episode(self.normalize, ep_i)
 
                     if ep_time > self.max_time: # update max time, used for padding
                         self.max_time = ep_time
 
                     ### Trackers
-                    latencies[ep_i] = ep_latencies.copy() # add episode latencies
-                    intensities[ep_i] = ep_intensities.copy() # add episode intensities
-
+                    intensities[ep_i] = ep_loss
                     self.losses[alg_i][iter][ep_i] = ep_loss
-                    self.optimal_losses[alg_i, ep_i] = opt_loss
 
-                    self.instant_regret[alg_i, ep_i] = regret
-                    if ep_i == 0:
-                        self.cum_regret[alg_i, ep_i] = regret
-                    else:
-                        self.cum_regret[alg_i, ep_i] = self.cum_regret[alg_i, ep_i - 1] + regret
+                    # self.losses[alg_i][iter][ep_i] = ep_loss
+                    # self.optimal_losses[alg_i, ep_i] = opt_loss
 
-                iter_latencies.append(latencies) # no padding
                 iter_intensities.append(intensities)
 
-                # Pad latencies for current iteration
-                # padded_latencies = self._pad_data(latencies, self.max_time + 1)
-                # iter_latencies.append(np.nanmean(padded_latencies, axis=0))
-
+                # Pad intensities for current iteration
                 # padded_intensities = self._pad_data(intensities, self.max_time + 1)
                 # iter_intensities.append(np.nanmean(padded_intensities, axis=0))
 
             if self.verbose:
                 print(f"[{alg_dict['title']}] End")
 
-            # Store padded latencies
-            self.latencies[alg_i] = iter_latencies
-            self.intensities[alg_i] = iter_intensities
-
-            # self.latencies[alg_i] = self._pad_data(iter_latencies, self.max_time + 1)
             # self.intensities[alg_i] = self._pad_data(iter_intensities, self.max_time + 1)
         
         # Average over iterations
         self.losses = np.array([np.mean(self.losses[alg_i], axis=0) for alg_i in range(len(self.algs))])
-        # self.latencies = np.array([np.nanmean(self.latencies[alg_i], axis=0) for alg_i in range(len(self.algs))])
         # self.intensities = np.array([np.nanmean(self.intensities[alg_i], axis=0) for alg_i in range(len(self.algs))])
-
-    def plot_regret(self):
-        for alg_i, alg_dict in enumerate(self.algs.values()):
-            plt.plot(self.instant_regret[alg_i], alpha=0.2)
-            plt.plot(self.cum_regret[alg_i])
-            # plt.plot(self.optimal_losses[alg_i])
-        plt.show()
 
     def plot_losses(self):
         sns.set_theme(style="darkgrid")
@@ -169,49 +144,8 @@ class Simulator():
             # title = f"[{', '.join(alg_dict['title'] for alg_dict in self.algs.values())}] Training with Seed {self.seed}"
 
         plt.title(title, fontsize=14)
-        plt.ylabel("Normalized Carbon Intensity", fontsize=12)
+        ylabel = "Normalized Carbon Intensity" if self.normalize else "Carbon Intensity"
+        plt.ylabel(ylabel, fontsize=12)
         plt.xlabel("# Episodes", fontsize=12)
         plt.legend(loc="best", fontsize=10)
         plt.show()
-
-    def plot_latency(self):
-
-        sns.set_theme(style='whitegrid')
-        sns.dark_palette("#69d", reverse=True, as_cmap=True)
-        fig, ax1 = plt.subplots()
-        ax2 = ax1.twinx()
-        for alg_i, alg_dict in enumerate(self.algs.values()):
-            for i in range(self.iterations):
-                for e in range(self.episodes):
-                    ax1.plot(self.intensities[alg_i][i][e])
-
-        for alg_i, alg_dict in enumerate(self.algs.values()):
-            for i in range(self.iterations):
-                for e in range(self.episodes):
-                    ax2.plot(self.latencies[alg_i][i][e], color='blue')
-        
-        plt.show()
-        # sns.set_theme(style='darkgrid')
-        # fig, ax1 = plt.subplots()
-        # ax2 = ax1.twinx()
-
-        # # Plot Latency
-        # for alg_i, alg_dict in enumerate(self.algs.values()):
-        #     ax1.plot(self.latencies[alg_i], label=f'Latency', color='red')
-
-        # for alg_i, alg_dict in enumerate(self.algs.values()):
-        #     ax2.plot(self.intensities[alg_i], label=f'CI', color='blue')
-            
-        # ax1.set_ylabel("Average Latency")
-        # ax1.legend(loc="best")
-        # ax2.set_ylabel("Carbon Intensity")
-        # ax2.legend(loc="best")
-
-        # plt.title("Latencies", fontsize=14)
-        # plt.xlabel("Time", fontsize=12)
-        # plt.legend(loc="best", fontsize=10)
-        # plt.show()
-
-        # Plot carbon intensity over time
-
-        # Plot latency over time, averaged over each episode
