@@ -2,7 +2,7 @@ import numpy as np
 import math
 
 class JobEnv():
-    def __init__(self, job_size, df, start_idx = 0):
+    def __init__(self, job_size, df, train_size=0.75, start_idx=0):
         self.job_size = job_size  # num states
         self.nA = 2     # num actions
         self.job_state = 0      # intitial state
@@ -15,16 +15,28 @@ class JobEnv():
 
         self.complete = False
         self.is_normal = None
+        self.is_train = True
 
         # Energy data
-        self.data = df
+        self.train_data, self.test_data = self._train_test_split(df, train_size)
 
-    def _get_energy_type(self, is_normal):
-        assert is_normal is not None, AssertionError("JobEnv not correctly initialized")
-        return 'normalized' if is_normal else 'carbon_intensity'
+    def _train_test_split(self, data, train_size):
+        split_idx = int(len(data) * train_size)
+        train_df = data.iloc[:split_idx].reset_index(drop=True)
+        test_df = data.iloc[split_idx:].reset_index(drop=True)
+        return train_df, test_df
+    
+    def _get_dataset(self):
+        energy_type = self._get_energy_type()
+        return self.train_data[energy_type] if self.is_train else self.test_data[energy_type]
+            
+    def _get_energy_type(self):
+        assert self.is_normal is not None, "JobEnv not correctly initialized"
+        return 'normalized' if self.is_normal else 'carbon_intensity'
 
     def _calculate_loss(self, action, tradeoff, idx):
-        intensity = self.data[self._get_energy_type(self.is_normal)].iloc[idx]
+        data = self._get_dataset()
+        intensity = data.iloc[idx]
 
         # if action == self.run:
         #     if self.time == 0:
@@ -56,10 +68,14 @@ class JobEnv():
 
         return loss
     
-    def get_optimal_carbon(self, normalize, idx, tradeoff):
-        data = self.data[self._get_energy_type(normalize)]
+    def get_random_index(self):
+        data = self.train_data if self.is_train else self.test_data
+        return np.random.randint(len(data)) 
+    
+    def get_optimal_carbon(self, idx, tradeoff):
+        data = self._get_dataset()
 
-        max_indices = np.arange(idx, idx + self.job_size) % len(self.data)
+        max_indices = np.arange(idx, idx + self.job_size) % len(data)
         max_carbon = data.iloc[max_indices].sum()
 
         if tradeoff > 0:
@@ -67,21 +83,19 @@ class JobEnv():
         else:
             bound = self.job_size
         T = math.ceil(bound)
-        T_optimal_indices = np.arange(idx, idx + T) % len(self.data)
+        T_optimal_indices = np.arange(idx, idx + T) % len(data)
         T_optimal_carbon = data.iloc[T_optimal_indices].nsmallest(self.job_size).sum()
 
         return T_optimal_carbon
-
     
-    def get_carbon(self, normalize):
-        idx = self.curr_idx
-        return self.data[self._get_energy_type(normalize)].iloc[idx]
+    def get_carbon(self):
+        data = self._get_dataset()
+        return data.iloc[self.curr_idx]
     
     def step(self, action, tradeoff):
-    
         loss = self._calculate_loss(action, tradeoff, self.curr_idx)
 
-        if (action == self.run and self.job_state == self.job_size - 1):
+        if action == self.run and self.job_state == self.job_size - 1:
             self.complete = True
             return self.job_state, loss, self.complete
         
@@ -91,10 +105,15 @@ class JobEnv():
             self.job_state += 1
 
         self.time += 1
-
-        self.curr_idx = (self.curr_idx + 1) % len(self.data)
+        self.curr_idx = (self.curr_idx + 1) % len(self._get_dataset())
 
         return self.job_state, loss, self.complete
+    
+    def train(self):
+        self.is_train = True
+
+    def test(self):
+        self.is_train = False
   
     def reset(self, start_idx, is_normal):
         self.job_state = 0
