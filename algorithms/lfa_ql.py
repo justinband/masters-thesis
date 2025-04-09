@@ -76,7 +76,7 @@ class LinearQLearning():
         normal_job_state = self.env.job_state / self.env.job_size # normalize
         normal_time = self.env.time / self.max_time
 
-        assert intensity > 1, AssertionError("ERROR: Intensities are not normalized")
+        assert 0 <= intensity <= 1, AssertionError("Intensities are not normalized")
         state = [normal_job_state, normal_time, intensity]
         assert len(state) == self.state_dim, AssertionError(f"State creation must be size {self.state_dim}. Currently is size {len(state)}.")
 
@@ -107,7 +107,9 @@ class LinearQLearning():
             self.approximators[action].update(features, td_error, self.lr, ep)
 
     
-    def train_episode(self, start_idx, normalize, episode):
+    def train_episode(self, normalize, episode):
+        self.env.train()
+        start_idx = self.env.get_random_index()
         self.env.reset(start_idx, normalize)
         done = False
         total_loss = 0
@@ -115,7 +117,7 @@ class LinearQLearning():
         idxes = []
         while not done:
 
-            curr_intensity = self.env.get_carbon(normalize)
+            curr_intensity = self.env.get_carbon()
             state = self._create_state(curr_intensity)
             action = self._choose_action(state)
 
@@ -127,11 +129,8 @@ class LinearQLearning():
             # Perform action
             next_job_state, loss, done = self.env.step(action, self.tradeoff)
 
-            if self.env.curr_idx >= len(self.env.data) - 1:
-                done = True
-
             # Store experience and train approximator
-            next_intensity = self.env.get_carbon(normalize)
+            next_intensity = self.env.get_carbon()
             next_state = self._create_state(next_intensity)
             self._save_in_memory(state, action, loss, next_state, done)
 
@@ -143,7 +142,7 @@ class LinearQLearning():
                 done = True
 
         # Regret
-        optimal_carbon = self.env.get_optimal_carbon(normalize=normalize, idx=start_idx, tradeoff=self.tradeoff)
+        optimal_carbon = self.env.get_optimal_carbon(idx=start_idx, tradeoff=self.tradeoff)
         # total_regret = utils.calculate_regret(total_loss, optimal_carbon)
 
         # Epsilon Decay
@@ -157,9 +156,12 @@ class LinearQLearning():
     
     def evaluate(self, start_idx, normalize):
         """
-        Given a trained policy, evaluates it.
+        Given a trained policy, evaluates it. This uses the test set defined
+        on environment creation.
         """
         print("Beginning Evaluation...")
+        self.env.test()
+        start_idx = self.env.get_random_index()
         self.env.reset(start_idx, normalize)
         done = False
         total_loss = 0
@@ -170,7 +172,7 @@ class LinearQLearning():
         loss_history = []
 
         while not done:
-            curr_intensity = self.env.get_carbon(normalize)
+            curr_intensity = self.env.get_carbon()
             intensity_history.append(curr_intensity)
 
             # Create state and get features
@@ -225,33 +227,38 @@ class LinearQLearning():
         return plt.gcf()
 
 
+# Hyper Parameters
 job_size = 10
 seed = 100
 alpha = 1e-5
 tradeoff = 0.05 # This proudces interesting results w/ normalize=False
-tradeoff = 0.2
+tradeoff = 0.05
 episodes = 1250
 normalize = True
 
+# Environment Parameters
+start_idx = 0
+train_size = 0.10
 energy_df = DataLoader(seed=seed).data
-env = JobEnv(job_size, df=energy_df, start_idx=0)
+env = JobEnv(job_size, energy_df, train_size, start_idx)
 np.random.seed(seed)
+
+# Agent
 agent = LinearQLearning(env, lr=alpha, tradeoff=tradeoff)
 
+# Tracking
 losses = []
 carbons = []
 optimal_carbons = []
 
 ## Training
 for e in tqdm(range(episodes)):
-    start_idx = np.random.randint(len(energy_df)) # random starting position in the energy
-    loss, carbon, opt_carbon = agent.train_episode(start_idx, normalize, e)
+    loss, carbon, opt_carbon = agent.train_episode(normalize, e)
     losses.append(loss)
     carbons.append(carbon)
     optimal_carbons.append(opt_carbon)
 
 ## Evaluate
-start_idx = np.random.randint(len(energy_df))
 total_loss, action_history, intensity_history, state_history, loss_history, q_vals_history = agent.evaluate(start_idx, normalize)
 
 def plot_training_carbons(carbons, optimal_carbons):
@@ -334,8 +341,6 @@ plt.show()
 
 plot_training_carbons(carbons, optimal_carbons)
 plt.show()
-
-print(intensity_history)
 
 plot_evaluation_results(action_history, intensity_history, loss_history, q_vals_history)
 print(f"Total loss: {total_loss:.2f}")
