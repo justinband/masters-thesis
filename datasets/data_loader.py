@@ -115,6 +115,9 @@ class DataLoader():
             return opt_df, opt_total, subrange_df, subrange_total
         
         return opt_df, opt_total, None, None
+    
+    def _get_quantile(self, data, alpha):
+        return np.quantile(data, 1/alpha)
 
     def _plot_carbon_data(self, ax, df, selected_df, title):
         ax.plot(df['date'], df['carbon_intensity'], 'o-', label='Carbon Intensity')
@@ -197,3 +200,26 @@ class DataLoader():
         plt.title(f"Danish Carbon Intensities from {min_date} to {max_date}")
 
         plt.show()
+
+    def plot_quantile_ranges(self, alpha):
+        data = self.data.copy()
+        data = data.sort_values(by='normalized', ascending=False)['normalized'].values
+        plt.plot(data)
+
+        quantile = 1/alpha
+        quantile_value = self._get_quantile(data, alpha)
+
+        indexes = np.where(data <= quantile_value)[0]
+        min_index = indexes[0]
+        max_index = indexes[-1]
+
+        plt.axvline(min_index, color='red', label=f'{(quantile * 100):.0f}% quantile', alpha=0.3)
+        plt.axvspan(min_index, max_index, ymin=0, ymax=1, color='skyblue', alpha=0.3)
+        
+        plt.axhline(quantile_value, color='red', label=f'{quantile_value}')
+
+        plt.ylabel("Normalzed Carbon Intensity")
+        plt.title(f"{(quantile * 100):.0f}% Quantile of Sorted Carbon Intensities")
+        plt.legend()
+        plt.show()
+
