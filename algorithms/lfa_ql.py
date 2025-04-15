@@ -114,7 +114,7 @@ class LinearQLearning():
         done = False
         total_loss = 0
         total_carbon = 0
-        idxes = []
+
         while not done:
 
             curr_intensity = self.env.get_carbon()
@@ -124,7 +124,7 @@ class LinearQLearning():
             # Store carbon if run
             if action == self.env.run:
                 total_carbon += curr_intensity
-                idxes.append(self.env.curr_idx)
+
 
             # Perform action
             next_job_state, loss, done = self.env.step(action, self.tradeoff)
@@ -152,9 +152,9 @@ class LinearQLearning():
         if episode % 100 == 0:
             print(f"Episode: {episode}, Total Loss: {total_loss:.2f}, Epsilon: {self.epsilon:.2f}")
 
-        return total_loss, total_carbon, optimal_carbon
+        return total_loss, total_carbon, optimal_carbon, self.env.time
     
-    def evaluate(self, start_idx, normalize):
+    def evaluate(self, normalize):
         """
         Given a trained policy, evaluates it. This uses the test set defined
         on environment creation.
@@ -225,41 +225,6 @@ class LinearQLearning():
         plt.tight_layout()
         plt.title(f"Tradeoff = {self.tradeoff}")
         return plt.gcf()
-
-
-# Hyper Parameters
-job_size = 10
-seed = 100
-alpha = 1e-5
-tradeoff = 0.05 # This proudces interesting results w/ normalize=False
-tradeoff = 0.05
-episodes = 1250
-normalize = True
-
-# Environment Parameters
-start_idx = 0
-train_size = 0.10
-energy_df = DataLoader(seed=seed).data
-env = JobEnv(job_size, energy_df, train_size, start_idx)
-np.random.seed(seed)
-
-# Agent
-agent = LinearQLearning(env, lr=alpha, tradeoff=tradeoff)
-
-# Tracking
-losses = []
-carbons = []
-optimal_carbons = []
-
-## Training
-for e in tqdm(range(episodes)):
-    loss, carbon, opt_carbon = agent.train_episode(normalize, e)
-    losses.append(loss)
-    carbons.append(carbon)
-    optimal_carbons.append(opt_carbon)
-
-## Evaluate
-total_loss, action_history, intensity_history, state_history, loss_history, q_vals_history = agent.evaluate(start_idx, normalize)
 
 def plot_training_carbons(carbons, optimal_carbons):
     """Plot the carbon intensities incurred during training (carbon per episode)"""
@@ -336,19 +301,59 @@ def plot_evaluation_results(actions, intensities, losses, q_vals):
     plt.tight_layout()
     return fig
 
-plot_training_progress(losses)
-plt.show()
 
-plot_training_carbons(carbons, optimal_carbons)
-plt.show()
 
-plot_evaluation_results(action_history, intensity_history, loss_history, q_vals_history)
-print(f"Total loss: {total_loss:.2f}")
-print(f"Job completed in {len(action_history)} hours")
-plt.show()
+def main():
+    print("Running LFA_QL")
+    # Hyper Parameters
+    job_size = 10
+    # seed = 100
+    alpha = 1e-5
+    tradeoff = 0.05 # This proudces interesting results w/ normalize=False
+    tradeoff = 0.05
+    episodes = 1250
+    normalize = True
 
-agent.visualize_weight_importance()
-plt.show()
+    # Environment Parameters
+    train_size = 0.8
+    energy_df = DataLoader().data
+    # energy_df = DataLoader(seed=seed).data
+    # np.random.seed(seed)
+    env = JobEnv(job_size, energy_df, train_size)
 
+    # Agent
+    agent = LinearQLearning(env, lr=alpha, tradeoff=tradeoff)
+
+    # Tracking
+    losses = []
+    carbons = []
+    optimal_carbons = []
+
+    ## Training
+    for e in tqdm(range(episodes)):
+        loss, carbon, opt_carbon, _ = agent.train_episode(normalize, e)
+        losses.append(loss)
+        carbons.append(carbon)
+        optimal_carbons.append(opt_carbon)
+
+    ## Evaluate
+    total_loss, action_history, intensity_history, state_history, loss_history, q_vals_history = agent.evaluate(normalize)
+
+    plot_training_progress(losses)
+    plt.show()
+
+    plot_training_carbons(carbons, optimal_carbons)
+    plt.show()
+
+    plot_evaluation_results(action_history, intensity_history, loss_history, q_vals_history)
+    print(f"Total loss: {total_loss:.2f}")
+    print(f"Job completed in {len(action_history)} hours")
+    plt.show()
+
+    agent.visualize_weight_importance()
+    plt.show()
+
+if __name__ == '__main__':
+    main()
 
 
