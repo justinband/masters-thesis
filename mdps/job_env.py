@@ -1,17 +1,25 @@
 import numpy as np
 import math
+from datasets import DataLoader
 
 class JobEnv():
-    def __init__(self, job_size, df, train_size=0.75, start_idx=0):
+    def __init__(self, job_size, alpha, dataloader: DataLoader, train_size=0.75, start_idx=0):
         self.job_size = job_size  # num states
         self.nA = 2     # num actions
         self.job_state = 0      # intitial state
         self.job_state_tracking = []
         self.time = 0   # time tracker
         self.curr_idx = start_idx    # current energy index
+        self.dataloader = dataloader
+        df = self.dataloader.data
 
+        # Actions
         self.pause = 0
         self.run = 1
+
+        # Calculate Lambda
+        self.alpha = alpha
+        self.lamb = self._get_lambda()
 
         self.complete = False
         self.is_normal = None
@@ -33,6 +41,10 @@ class JobEnv():
     def _get_energy_type(self):
         assert self.is_normal is not None, "JobEnv not correctly initialized"
         return 'normalized' if self.is_normal else 'carbon_intensity'
+    
+    def _get_lambda(self):
+        carbon_alpha = self.dataloader.get_quantile_from_data(self.alpha)
+        return 1/self.alpha * carbon_alpha * self.job_size
 
     def _calculate_loss(self, action, tradeoff, idx):
         data = self._get_dataset()

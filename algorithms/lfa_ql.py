@@ -307,22 +307,19 @@ def main():
     print("Running LFA_QL")
     # Hyper Parameters
     job_size = 10
-    # seed = 100
-    alpha = 1e-5
-    tradeoff = 0.05 # This proudces interesting results w/ normalize=False
+    lr = 1e-5
     tradeoff = 0.05
     episodes = 1250
     normalize = True
+    alpha = 2
 
     # Environment Parameters
     train_size = 0.8
-    energy_df = DataLoader().data
-    # energy_df = DataLoader(seed=seed).data
-    # np.random.seed(seed)
-    env = JobEnv(job_size, energy_df, train_size)
+    dataloader = DataLoader()
+    env = JobEnv(job_size, alpha, dataloader, train_size)
 
     # Agent
-    agent = LinearQLearning(env, lr=alpha, tradeoff=tradeoff)
+    agent = LinearQLearning(env, lr=lr, tradeoff=tradeoff)
 
     # Tracking
     losses = []

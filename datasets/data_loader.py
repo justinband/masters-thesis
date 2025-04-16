@@ -144,6 +144,11 @@ class DataLoader():
         
         plt.show()
 
+    def get_quantile_from_data(self, alpha):
+        data = self.data.copy()
+        data = data.sort_values(by='normalized', ascending=False)['normalized'].values
+        return self._get_quantile(data, alpha)
+
     def find_and_plot_optimal_ci(self, df, job_size, find_subrange=False, show_plots=False):
         opt_df, opt_ci, sub_df, sub_ci = self._get_optimal_intensities(df, job_size, get_subrange=find_subrange)
         if show_plots:
