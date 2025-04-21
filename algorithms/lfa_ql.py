@@ -31,7 +31,7 @@ class LinearQLearning():
         self.max_time = 500 # TODO: Fix this. Maybe in relation to upper-bound?
 
         self.state_dim = 3
-        self.feature_dim = 5
+        self.feature_dim = 4
         self.action_dim = [0, 1]
 
         # Use one for each action because it's a clear delineation
@@ -52,7 +52,7 @@ class LinearQLearning():
             job_state,          # Normalized
             time,                   # Normalized
             carbon,
-            job_state * carbon, # Interaction between job state and carbon. How far job is and how 'bad' it is to run now
+            # job_state * carbon, # Interaction between job state and carbon. How far job is and how 'bad' it is to run now
             # time * carbon,       # Interaction between time and carbon
             # job_state * time,    # Interaction between job state and time
             # job_state**2,        # Quadratic terms
@@ -142,17 +142,18 @@ class LinearQLearning():
                 done = True
 
         # Regret
-        optimal_carbon = self.env.get_optimal_carbon(idx=start_idx, tradeoff=self.tradeoff)
-        # total_regret = utils.calculate_regret(total_loss, optimal_carbon)
+        optimal_loss, optimal_carbon, optimal_time = self.env.calc_opt_carbon(start_idx=start_idx)
+
+        regret = utils.calculate_regret(total_loss, optimal_loss)
 
         # Epsilon Decay
         if self.epsilon > self.epsilon_min:
             self.epsilon *= self.epsilon_decay
 
         if episode % 100 == 0:
-            print(f"Episode: {episode}, Total Loss: {total_loss:.2f}, Epsilon: {self.epsilon:.2f}")
+            print(f"Episode: {episode}, Total Loss: {total_loss:.2f}, Optimal Loss: {optimal_loss:.2f}, TimeDiff: {optimal_time - self.env.time}, Epsilon: {self.epsilon:.2f}")
 
-        return total_loss, total_carbon, optimal_carbon, self.env.time
+        return total_loss, total_carbon, optimal_carbon, regret
     
     def evaluate(self, normalize):
         """
@@ -161,10 +162,12 @@ class LinearQLearning():
         """
         print("Beginning Evaluation...")
         self.env.test()
-        start_idx = self.env.get_random_index()
+        # start_idx = self.env.get_random_index()
+        start_idx = 6500
         self.env.reset(start_idx, normalize)
         done = False
         total_loss = 0
+        total_carbon = 0
         intensity_history = []
         state_history = []
         action_history = []
@@ -192,13 +195,15 @@ class LinearQLearning():
             _, loss, done = self.env.step(action, self.tradeoff)
             loss_history.append(loss)
             total_loss += loss
+            if action == self.env.run:
+                total_carbon += curr_intensity
 
-        return total_loss, action_history, intensity_history, state_history, loss_history, q_vals_history
+        return total_loss, action_history, intensity_history, state_history, loss_history, q_vals_history, total_carbon
 
     
     def visualize_weight_importance(self):
         feature_names = [
-            "Job State", "Time", "Carbon", "Job x Carbon", "exp(-Job State)"
+            "Job State", "Time", "Carbon", "exp(-Job State)"
         ]
         # feature_names = [
         #     "Bias", "Job State", "Time", "Carbon", 
@@ -265,6 +270,29 @@ def plot_training_progress(losses):
     plt.legend()
     return plt.gcf()
 
+def plot_regret(regrets, cum_regret):
+    plt.figure(figsize=(10, 6))
+    plt.plot(regrets)
+    plt.xlabel('Episode')
+    plt.ylabel('Regret')
+    plt.title('Training Regret')
+
+    plt.grid(True)
+    plt.tight_layout()
+    plt.legend()
+    plt.show()
+
+    plt.figure(figsize=(10, 6))
+    plt.plot(cum_regret)
+    plt.xlabel('Episode')
+    plt.ylabel('Cumulative Regret')
+    plt.title('Training Cumulative Regret')
+
+    plt.grid(True)
+    plt.tight_layout()
+    plt.legend()
+    return plt.gcf()
+
 def plot_evaluation_results(actions, intensities, losses, q_vals):
     fig, axes = plt.subplots(4, 1, figsize=(12, 16), sharex=True)
 
@@ -302,16 +330,15 @@ def plot_evaluation_results(actions, intensities, losses, q_vals):
     return fig
 
 
-
 def main():
     print("Running LFA_QL")
     # Hyper Parameters
-    job_size = 10
+    job_size = 30
     lr = 1e-5
     tradeoff = 0.05
-    episodes = 1250
+    episodes = 4000
     normalize = True
-    alpha = 2
+    alpha = 4
 
     # Environment Parameters
     train_size = 0.8
@@ -325,16 +352,24 @@ def main():
     losses = []
     carbons = []
     optimal_carbons = []
+    regrets = []
+    cum_regret = []
 
     ## Training
     for e in tqdm(range(episodes)):
-        loss, carbon, opt_carbon, _ = agent.train_episode(normalize, e)
+        loss, carbon, opt_carbon, regret = agent.train_episode(normalize, e)
         losses.append(loss)
         carbons.append(carbon)
         optimal_carbons.append(opt_carbon)
+        regrets.append(regret)
+
+        if e == 0:
+            cum_regret.append(regret)
+        else:
+            cum_regret.append(cum_regret[-1] + regret)
 
     ## Evaluate
-    total_loss, action_history, intensity_history, state_history, loss_history, q_vals_history = agent.evaluate(normalize)
+    total_loss, action_history, intensity_history, state_history, loss_history, q_vals_history, total_carbon = agent.evaluate(normalize)
 
     plot_training_progress(losses)
     plt.show()
@@ -342,8 +377,12 @@ def main():
     plot_training_carbons(carbons, optimal_carbons)
     plt.show()
 
+    plot_regret(regrets, cum_regret)
+    plt.show()
+
     plot_evaluation_results(action_history, intensity_history, loss_history, q_vals_history)
     print(f"Total loss: {total_loss:.2f}")
+    print(f"Total Carbon: {total_carbon:.5f}")
     print(f"Job completed in {len(action_history)} hours")
     plt.show()
 
