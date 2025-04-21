@@ -20,9 +20,8 @@ class LinearFunctionApproximator:
         self.weights += lr * error * features
 
 class LinearQLearning():
-    def __init__(self, env: JobEnv, lr=0.01, epsilon = 1, tradeoff=1.0):
+    def __init__(self, env: JobEnv, lr=0.01, epsilon = 1):
         self.env = env
-        self.tradeoff = tradeoff
         self.lr = lr
         self.epsilon = epsilon
         self.epsilon_min = 0.01
@@ -136,7 +135,7 @@ class LinearQLearning():
 
 
             # Perform action
-            next_job_state, loss, done = self.env.step(action, self.tradeoff)
+            _, loss, done = self.env.step(action)
 
             # Store experience and train approximator
             next_intensity = self.env.get_carbon()
@@ -202,7 +201,7 @@ class LinearQLearning():
             action_history.append(action)
 
             # Perform action
-            _, loss, done = self.env.step(action, self.tradeoff)
+            _, loss, done = self.env.step(action)
             loss_history.append(loss)
             total_loss += loss
             if action == self.env.run:

@@ -1,11 +1,10 @@
 from abc import ABC, abstractmethod
 
 class LearningAlg():
-    def __init__(self, env, epsilon, alpha, tradeoff):
+    def __init__(self, env, epsilon, lr):
         self.env = env
         self.epsilon = epsilon  # Learning rate
-        self.alpha = alpha      # Exploration-rate
-        self.tradeoff = tradeoff
+        self.lr = lr      # Exploration-rate
 
     @abstractmethod
     def train_episode(self, data):

@@ -98,17 +98,17 @@ class JobEnv():
 
         return optimal_loss, optimal_carbon, T
 
-    def _calculate_loss(self, action, tradeoff, idx):
+    def _calculate_loss(self, action, idx):
         data = self._get_dataset()
         intensity_t = data.iloc[idx]
-        tradeoff = self.lamb
+        lamb = self.lamb
         T_prev = self.time - 1
         N_prev = self.job_state_tracking[-1] if self.job_state_tracking else 0
 
         if action == self.run:
-            return self._calc_run_loss(tradeoff, T_prev, N_prev, intensity_t)
+            return self._calc_run_loss(lamb, T_prev, N_prev, intensity_t)
         elif action == self.pause:
-            return self._calc_pause_loss(tradeoff, N_prev)
+            return self._calc_pause_loss(lamb, N_prev)
         else:
             raise Exception("Loss Calculation: Neither run or pause action were performed")
     
@@ -135,8 +135,8 @@ class JobEnv():
         data = self._get_dataset()
         return data.iloc[self.curr_idx]
     
-    def step(self, action, tradeoff):
-        loss = self._calculate_loss(action, tradeoff, self.curr_idx)
+    def step(self, action):
+        loss = self._calculate_loss(action, self.curr_idx)
 
         if action == self.run and self.job_state == self.job_size - 1:
             self.complete = True
