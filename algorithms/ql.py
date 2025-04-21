@@ -199,7 +199,7 @@ def main():
     env = JobEnv(job_size, energy_df, train_size)
 
     # Agent
-    agent = NewQLearn(env, lr=alpha, tradeoff=tradeoff)
+    agent = QLearn(env, lr=alpha, tradeoff=tradeoff)
 
     # Tracking
     losses = []
