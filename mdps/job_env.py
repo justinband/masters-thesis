@@ -45,60 +45,91 @@ class JobEnv():
     def _get_lambda(self):
         carbon_alpha = self.dataloader.get_quantile_from_data(self.alpha)
         return 1/self.alpha * carbon_alpha * self.job_size
+    
+    def _get_T_alpha(self, sum_data):
+        # T <= [alpha * (1/carbon_alpha) * sum^N_{i=1} c_i] + N
+        carbon_alpha = self.dataloader.get_quantile_from_data(self.alpha)
+        N = self.job_size
+        T = (self.alpha * (1/carbon_alpha) * sum_data) + N
+        return T
+
+    def calc_opt_carbon(self, start_idx):
+        data = self._get_dataset()
+        job_size = self.job_size
+
+        if self.alpha == 0: # Running job in same time
+            T = job_size
+        else:
+            first_n_indices = np.arange(start_idx, start_idx + job_size) % len(data)
+            first_n_carbon = data.iloc[first_n_indices].sum()
+            T = self._get_T_alpha(first_n_carbon)
+            T = math.ceil(T)
+        
+        # Calculate T upper bound
+        T_indices = np.arange(start_idx, start_idx + T) % len(data)
+        T_carbon = data.iloc[T_indices].reset_index(drop=True)
+        run_indices = T_carbon.nsmallest(job_size).index
+
+        ## Calculate losses for the optimal actions
+        state_tracking = []
+        state = 0
+        optimal_carbon = 0
+        optimal_loss = 0
+
+        for t in range(T):
+            intensity = T_carbon[t]
+            T_prev = t - 1
+            N_prev = state_tracking[-1] if state_tracking else 0
+
+            if t in run_indices:
+                loss = self._calc_run_loss(self.lamb, T_prev, N_prev, intensity)
+                optimal_carbon += intensity
+
+                state_tracking.append(state)
+                state += 1
+            else:
+                loss = self._calc_pause_loss(self.lamb, N_prev)
+                state_tracking.append(state)
+
+            optimal_loss += loss
+
+            if state >= job_size:
+                break
+
+        return optimal_loss, optimal_carbon, T
 
     def _calculate_loss(self, action, tradeoff, idx):
         data = self._get_dataset()
-        intensity = data.iloc[idx]
+        intensity_t = data.iloc[idx]
+        tradeoff = self.lamb
+        T_prev = self.time - 1
+        N_prev = self.job_state_tracking[-1] if self.job_state_tracking else 0
 
-        # if action == self.run:
-        #     if self.time == 0:
-        #         loss = intensity
-        #     else:
-        #         # Numer is [prev time (time - 1)] - state in previous time
-        #         #   This does not mean state - 1! It means what was the state at the last time step
-        #         prev_time = self.time - 1
-        #         prev_state = self.job_state_tracking[prev_time]
-
-        #         if prev_state > 0:
-        #             offset = 0
-        #         else:
-        #             offset = -tradeoff * (prev_time - prev_state) / (prev_state**2 + prev_state)
-
-        #         loss = intensity + offset
-        # elif action == self.pause:
-        #     if self.time == 0
-        if action == self.run:  # Run
-            time_t = self.time - 1
-            state_t = self.job_state - 1
-            offset = -tradeoff * (time_t - state_t) / (state_t**2 + state_t) if state_t > 0 else 0
-            loss = intensity + offset
+        if action == self.run:
+            return self._calc_run_loss(tradeoff, T_prev, N_prev, intensity_t)
         elif action == self.pause:
-            state_t = self.job_state - 1
-            # TODO: We do tradeoff in the else case. Good or bad?
-            offset = tradeoff * (1/ state_t) if state_t > 0 else tradeoff
-            loss = offset
+            return self._calc_pause_loss(tradeoff, N_prev)
+        else:
+            raise Exception("Loss Calculation: Neither run or pause action were performed")
+    
+    def _calc_pause_loss(self, lamb, state):
+        if state == 0:
+            return 0
+        else:
+            return lamb/state
 
-        return loss
+    def _calc_run_loss(self, lamb, time, state, intensity):
+        if state == 0:
+            return intensity
+        
+        numer = time - state
+        denom = (state + 1) * state
+        penalty = -lamb * (numer/denom)
+        return intensity + penalty
     
     def get_random_index(self):
         data = self.train_data if self.is_train else self.test_data
         return np.random.randint(len(data)) 
-    
-    def get_optimal_carbon(self, idx, tradeoff):
-        data = self._get_dataset()
-
-        max_indices = np.arange(idx, idx + self.job_size) % len(data)
-        max_carbon = data.iloc[max_indices].sum()
-
-        if tradeoff > 0:
-            bound = (self.job_size / tradeoff) * max_carbon + self.job_size
-        else:
-            bound = self.job_size
-        T = math.ceil(bound)
-        T_optimal_indices = np.arange(idx, idx + T) % len(data)
-        T_optimal_carbon = data.iloc[T_optimal_indices].nsmallest(self.job_size).sum()
-
-        return T_optimal_carbon
     
     def get_carbon(self):
         data = self._get_dataset()
