@@ -1,50 +1,231 @@
 import numpy as np
-from algorithms import LearningAlg
 import matplotlib.pyplot as plt
+from tqdm import tqdm
+from algorithms import LearningAlg
+from mdps import JobEnv
+from datasets import DataLoader
 
 class QLearn(LearningAlg):
 
-    def __init__(self, env, epsilon = 0.1, alpha = 1e-6, latency=0):
-        super().__init__(env, epsilon, alpha, latency)
-        self.q = np.random.rand(self.env.nS, self.env.nA) 
+    def __init__(self, env: JobEnv, lr=0.01, epsilon=1, tradeoff=1.0):
+        self.env = env
+        self.tradeoff = tradeoff
+        self.lr = lr
+        self.epsilon = epsilon
+        self.epsilon_min = 0.01
+        self.epsilon_decay = 0.99
+        self.q = np.zeros((self.env.job_size, self.env.nA))
 
-    def choose_action(self, q, state, curr_latency):
-        if (self.max_latency == 0) or (curr_latency >= self.max_latency): # Mandatory run
-            return self.env.run
-        elif np.random.rand() < self.epsilon: # Explore
-            return np.random.choice(self.env.nA)
-        else: # Exploit
-            return np.argmin(q[state]) # Choose smallest Q-val
+        self.action_dim = [0, 1]
+
+    def _choose_action(self, state):
+        if np.random.rand() < self.epsilon:
+            return np.random.choice(self.action_dim)
+        else:
+            min_q = np.where(self.q[state] == np.min(self.q[state]))[0] # handle duplicates
+            return np.random.choice(min_q)
         
-    def update_q_value(self, s, a, loss, s_prime):
-        # Q(s, a) = Q(s, a) + a(loss + min_a' Q(s', a') - Q(s, a))
-        delta = np.min(self.q[s_prime]) - self.q[s, a]
-        return self.q[s, a] + self.alpha * (loss + delta)
+    def _update_q_value(self, state, action, loss, s_prime):
+        # Loss should come from job_env
+        q_delta = np.min(self.q[s_prime]) - self.q[state, action]
+        self.q[state, action] += self.lr * (loss + q_delta)
 
-    def run_episode(self, start_idx, train: bool):
-        state = self.env.reset(start_idx)
-        is_done = False
-        episode_losses = []
-        episode_latencies = []
-        episode_intensities = []
+    def train_episode(self, normalize, episode):
+        self.env.train()
+        start_idx = self.env.get_random_index()
+        state = self.env.reset(start_idx, normalize)
+        done = False
 
-        while not is_done:
-            curr_latency = self.env.get_latency()
-            episode_latencies.append(curr_latency)
+        total_loss = 0
+        total_carbon = 0
 
-            curr_intensity = self.env.get_intensity()
-            episode_intensities.append(curr_intensity)
+        while not done:
+            curr_intenisty = self.env.get_carbon()
+            action = self._choose_action(state)
 
-            action = self.choose_action(self.q, state, curr_latency)
-            next_state, loss, is_done = self.env.step(action)
+            if action == self.env.run:
+                total_carbon += curr_intenisty
 
-            if train:
-                self.q[state, action] = self.update_q_value(state, action, loss, next_state)
+            next_job_state, loss, done = self.env.step(action, self.tradeoff)
 
-            episode_losses.append(loss)
-            state = next_state
+            self._update_q_value(state, action, loss, next_job_state)
+            
+            total_loss += loss
+            state = next_job_state
 
-        return episode_losses, episode_latencies, episode_intensities, self.env.time
+        optimal_carbon = self.env.get_optimal_carbon(idx=start_idx, tradeoff=self.tradeoff)
+
+        if self.epsilon > self.epsilon_min:
+            self.epsilon *= self.epsilon_decay
+        
+        if episode % 100 == 0:
+            print(f"Episode: {episode}, Total Loss: {total_loss:.2f}, Epsilon: {self.epsilon:.2f}")
+
+        return total_loss, total_carbon, optimal_carbon, self.env.time
     
-    def reset(self):
-        self.q = np.random.rand(self.env.nS, self.env.nA) 
+    def evaluate(self, normalize):
+        self.env.test()
+        start_idx = self.env.get_random_index()
+        state = self.env.reset(start_idx, normalize)
+
+        done = False
+        total_loss = 0
+        intensity_history = []
+        state_history = []
+        action_history = []
+        q_vals_history = []
+        loss_history = []
+
+        for s in range(self.env.job_size):
+            print(f'Q in {s}: {self.q[s]}')
+
+        max_time = 1500
+
+        while not done:
+            curr_intenisty = self.env.get_carbon()
+            intensity_history.append(curr_intenisty)
+
+            state_history.append(state)
+
+            q_vals = self.q[state]
+            q_vals_history.append(q_vals)
+
+            action = np.argmin(q_vals)
+            action_history.append(action)
+
+            _, loss, done = self.env.step(action, self.tradeoff)
+            loss_history.append(loss)
+            total_loss += loss
+
+            if self.env.time >= max_time:
+                print(f"Evaluation took longer than {max_time} hours")
+                done = True
+
+        return total_loss, action_history, intensity_history, state_history, loss_history, q_vals_history
+
+
+def plot_training_carbons(carbons, optimal_carbons):
+    """Plot the carbon intensities incurred during training (carbon per episode)"""
+    plt.figure(figsize=(10, 6))
+    plt.plot(carbons, alpha=0.5, label='Agent Carbon')
+    plt.plot(optimal_carbons, alpha=0.5, label='Optimal Carbon')
+    plt.xlabel("Episode")
+    plt.ylabel('Total Carbon')
+    plt.title('Carbon incurred during training')
+
+    window_size = min(100, len(carbons)//10)
+    smoothed_carbon = np.convolve(carbons, np.ones(window_size)/window_size, mode='valid')
+    smoothed_opt_carbon = np.convolve(optimal_carbons, np.ones(window_size)/window_size, mode='valid')
+
+    plt.plot(range(window_size-1, len(carbons)), smoothed_carbon, 'r-', linewidth=2, label='Average Agent Carbon')
+    plt.plot(range(window_size-1, len(optimal_carbons)), smoothed_opt_carbon, 'g-', linewidth=2, label='Average Optimal Carbon')
+
+    plt.grid(True)
+    plt.tight_layout()
+    plt.legend()
+    return plt.gcf()
+
+def plot_training_progress(losses):
+    """Plot the training progress (losses per episode)."""
+    plt.figure(figsize=(10, 6))
+    plt.plot(losses)
+    plt.xlabel('Episode')
+    plt.ylabel('Total Reward')
+    plt.title('Training Progress')
+    
+    # Add a trend line
+    window_size = min(10, len(losses)//10)
+    smoothed = np.convolve(losses, np.ones(window_size)/window_size, mode='valid')
+    plt.plot(range(window_size-1, len(losses)), smoothed, 'r-', linewidth=2)
+    
+    plt.grid(True)
+    plt.tight_layout()
+    plt.legend()
+    return plt.gcf()
+
+def plot_evaluation_results(actions, intensities, losses, q_vals):
+    fig, axes = plt.subplots(4, 1, figsize=(12, 16), sharex=True)
+
+    # Plot carbon intensity
+    axes[0].plot(intensities, 'g-')
+    axes[0].set_title('Carbon Intensity')
+    axes[0].set_ylabel('Intensity')
+    axes[0].grid(True)
+    
+    # Plot actions (Run/Pause)
+    axes[1].plot(actions, 'bo-', drawstyle='steps-post')
+    axes[1].set_title('Actions (0=Pause, 1=Run)')
+    axes[1].set_ylabel('Action')
+    axes[1].set_ylim(-0.1, 1.1)
+    axes[1].grid(True)
+    
+    # Plot losses
+    axes[2].plot(losses, 'r-')
+    axes[2].set_title('Losses')
+    axes[2].set_ylabel('Loss')
+    axes[2].grid(True)
+    
+    # Plot Q-values
+    pause_q = [q[0] for q in q_vals]
+    run_q = [q[1] for q in q_vals]
+    axes[3].plot(pause_q, 'c-', label='Pause Q-value')
+    axes[3].plot(run_q, 'm-', label='Run Q-value')
+    axes[3].set_title('Q-Values')
+    axes[3].set_xlabel('Time Step')
+    axes[3].set_ylabel('Q-Value')
+    axes[3].legend()
+    axes[3].grid(True)
+    
+    plt.tight_layout()
+    return fig
+
+
+def main():
+    print("Running New QL")
+    # Hyper Parameters
+    job_size = 10
+    # seed = 100
+    alpha = 1e-5
+    tradeoff = 0.05 # This proudces interesting results w/ normalize=False
+    tradeoff = 0.05
+    episodes = 1250
+    normalize = True
+
+    # Environment Parameters
+    train_size = 0.8
+    energy_df = DataLoader().data
+    # energy_df = DataLoader(seed=seed).data
+    # np.random.seed(seed)
+    env = JobEnv(job_size, energy_df, train_size)
+
+    # Agent
+    agent = NewQLearn(env, lr=alpha, tradeoff=tradeoff)
+
+    # Tracking
+    losses = []
+    carbons = []
+    optimal_carbons = []
+
+    ## Training
+    for e in tqdm(range(episodes)):
+        loss, carbon, opt_carbon, _ = agent.train_episode(normalize, e)
+        losses.append(loss)
+        carbons.append(carbon)
+        optimal_carbons.append(opt_carbon)
+
+    ## Evaluate
+    total_loss, action_history, intensity_history, state_history, loss_history, q_vals_history = agent.evaluate(normalize)
+
+    plot_training_progress(losses)
+    plt.show()
+
+    plot_training_carbons(carbons, optimal_carbons)
+    plt.show()
+
+    plot_evaluation_results(action_history, intensity_history, loss_history, q_vals_history)
+    print(f"Total loss: {total_loss:.2f}")
+    print(f"Job completed in {len(action_history)} hours")
+    plt.show()
+
+if __name__ == '__main__':
+    main()
