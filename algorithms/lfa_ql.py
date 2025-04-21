@@ -4,7 +4,7 @@ import random
 import pandas as pd
 from collections import deque
 from tqdm import tqdm
-from algorithms import utils
+from utils import generic, plotting
 from mdps import JobEnv
 from collections import deque
 from datasets import DataLoader
@@ -32,6 +32,15 @@ class LinearQLearning():
 
         self.state_dim = 3
         self.feature_dim = 4
+        self.feature_names = [
+            "Job State", "Time", "Carbon", "exp(-Job State)"
+        ]
+        # self.feature_names = [
+        #     "Bias", "Job State", "Time", "Carbon", 
+        #     "Job×Carbon", "Time×Carbon", "Job×Time",
+        #     "Job²", "Time²", "Carbon²", 
+        #     "exp(-Job)", "log(Job+1)"
+        # ]
         self.action_dim = [0, 1]
 
         # Use one for each action because it's a clear delineation
@@ -144,7 +153,7 @@ class LinearQLearning():
         # Regret
         optimal_loss, optimal_carbon, optimal_time = self.env.calc_opt_carbon(start_idx=start_idx)
 
-        regret = utils.calculate_regret(total_loss, optimal_loss)
+        regret = generic.calculate_regret(total_loss, optimal_loss)
 
         # Epsilon Decay
         if self.epsilon > self.epsilon_min:
@@ -155,14 +164,15 @@ class LinearQLearning():
 
         return total_loss, total_carbon, optimal_carbon, regret
     
-    def evaluate(self, normalize):
+    def evaluate(self, normalize, start_idx=None):
         """
         Given a trained policy, evaluates it. This uses the test set defined
         on environment creation.
         """
         print("Beginning Evaluation...")
         self.env.test()
-        # start_idx = self.env.get_random_index()
+        if start_idx is None:
+            start_idx = self.env.get_random_index()
         start_idx = 6500
         self.env.reset(start_idx, normalize)
         done = False
@@ -199,136 +209,6 @@ class LinearQLearning():
                 total_carbon += curr_intensity
 
         return total_loss, action_history, intensity_history, state_history, loss_history, q_vals_history, total_carbon
-
-    
-    def visualize_weight_importance(self):
-        feature_names = [
-            "Job State", "Time", "Carbon", "exp(-Job State)"
-        ]
-        # feature_names = [
-        #     "Bias", "Job State", "Time", "Carbon", 
-        #     "Job×Carbon", "Time×Carbon", "Job×Time",
-        #     "Job²", "Time²", "Carbon²", 
-        #     "exp(-Job)", "log(Job+1)"
-        # ]
-
-        plt.figure(figsize=(12, 10))
-
-        for i, action_name in enumerate(["Pause", "Run"]):
-            plt.subplot(2, 1, i+1)
-            weights = self.approximators[i].weights
-            abs_weights = np.abs(weights)
-            # Sort by absolute weight magnitude
-            sorted_idx = np.argsort(abs_weights)[::-1]
-            
-            plt.bar(range(len(weights)), abs_weights[sorted_idx], color='skyblue')
-            plt.xticks(range(len(weights)), [feature_names[j] for j in sorted_idx], rotation=45)
-            plt.title(f"Feature Importance for {action_name} Action")
-            plt.ylabel("Absolute Weight Value")
-            plt.grid(axis='y', linestyle='--', alpha=0.7)
-        
-        plt.tight_layout()
-        plt.title(f"Tradeoff = {self.tradeoff}")
-        return plt.gcf()
-
-def plot_training_carbons(carbons, optimal_carbons):
-    """Plot the carbon intensities incurred during training (carbon per episode)"""
-    plt.figure(figsize=(10, 6))
-    plt.plot(carbons, alpha=0.5, label='Agent Carbon')
-    plt.plot(optimal_carbons, alpha=0.5, label='Optimal Carbon')
-    plt.xlabel("Episode")
-    plt.ylabel('Total Carbon')
-    plt.title('Carbon incurred during training')
-
-    window_size = min(100, len(carbons)//10)
-    smoothed_carbon = np.convolve(carbons, np.ones(window_size)/window_size, mode='valid')
-    smoothed_opt_carbon = np.convolve(optimal_carbons, np.ones(window_size)/window_size, mode='valid')
-
-    plt.plot(range(window_size-1, len(carbons)), smoothed_carbon, 'r-', linewidth=2, label='Average Agent Carbon')
-    plt.plot(range(window_size-1, len(optimal_carbons)), smoothed_opt_carbon, 'g-', linewidth=2, label='Average Optimal Carbon')
-
-    plt.grid(True)
-    plt.tight_layout()
-    plt.legend()
-    return plt.gcf()
-
-def plot_training_progress(losses):
-    """Plot the training progress (losses per episode)."""
-    plt.figure(figsize=(10, 6))
-    plt.plot(losses)
-    plt.xlabel('Episode')
-    plt.ylabel('Total Reward')
-    plt.title('Training Progress')
-    
-    # Add a trend line
-    window_size = min(10, len(losses)//10)
-    smoothed = np.convolve(losses, np.ones(window_size)/window_size, mode='valid')
-    plt.plot(range(window_size-1, len(losses)), smoothed, 'r-', linewidth=2)
-    
-    plt.grid(True)
-    plt.tight_layout()
-    plt.legend()
-    return plt.gcf()
-
-def plot_regret(regrets, cum_regret):
-    plt.figure(figsize=(10, 6))
-    plt.plot(regrets)
-    plt.xlabel('Episode')
-    plt.ylabel('Regret')
-    plt.title('Training Regret')
-
-    plt.grid(True)
-    plt.tight_layout()
-    plt.legend()
-    plt.show()
-
-    plt.figure(figsize=(10, 6))
-    plt.plot(cum_regret)
-    plt.xlabel('Episode')
-    plt.ylabel('Cumulative Regret')
-    plt.title('Training Cumulative Regret')
-
-    plt.grid(True)
-    plt.tight_layout()
-    plt.legend()
-    return plt.gcf()
-
-def plot_evaluation_results(actions, intensities, losses, q_vals):
-    fig, axes = plt.subplots(4, 1, figsize=(12, 16), sharex=True)
-
-    # Plot carbon intensity
-    axes[0].plot(intensities, 'g-')
-    axes[0].set_title('Carbon Intensity')
-    axes[0].set_ylabel('Intensity')
-    axes[0].grid(True)
-    
-    # Plot actions (Run/Pause)
-    axes[1].plot(actions, 'bo-', drawstyle='steps-post')
-    axes[1].set_title('Actions (0=Pause, 1=Run)')
-    axes[1].set_ylabel('Action')
-    axes[1].set_ylim(-0.1, 1.1)
-    axes[1].grid(True)
-    
-    # Plot losses
-    axes[2].plot(losses, 'r-')
-    axes[2].set_title('Losses')
-    axes[2].set_ylabel('Loss')
-    axes[2].grid(True)
-    
-    # Plot Q-values
-    pause_q = [q[0] for q in q_vals]
-    run_q = [q[1] for q in q_vals]
-    axes[3].plot(pause_q, 'c-', label='Pause Q-value')
-    axes[3].plot(run_q, 'm-', label='Run Q-value')
-    axes[3].set_title('Q-Values')
-    axes[3].set_xlabel('Time Step')
-    axes[3].set_ylabel('Q-Value')
-    axes[3].legend()
-    axes[3].grid(True)
-    
-    plt.tight_layout()
-    return fig
-
 
 def main():
     print("Running LFA_QL")
@@ -371,22 +251,22 @@ def main():
     ## Evaluate
     total_loss, action_history, intensity_history, state_history, loss_history, q_vals_history, total_carbon = agent.evaluate(normalize)
 
-    plot_training_progress(losses)
+    plotting.plot_training_progress(losses)
+
+
+    plotting.plot_training_carbons(carbons, optimal_carbons)
     plt.show()
 
-    plot_training_carbons(carbons, optimal_carbons)
+    plotting.plot_regret(regrets, cum_regret)
     plt.show()
 
-    plot_regret(regrets, cum_regret)
-    plt.show()
-
-    plot_evaluation_results(action_history, intensity_history, loss_history, q_vals_history)
     print(f"Total loss: {total_loss:.2f}")
     print(f"Total Carbon: {total_carbon:.5f}")
     print(f"Job completed in {len(action_history)} hours")
+    plotting.plot_evaluation_results(action_history, intensity_history, loss_history, q_vals_history)
     plt.show()
 
-    agent.visualize_weight_importance()
+    plotting.visualize_weights(agent.feature_names, agent.approximators)
     plt.show()
 
 if __name__ == '__main__':
