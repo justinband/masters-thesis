@@ -1,36 +1,47 @@
 from datasets import DataLoader
 from mdps import JobEnv
-from algorithms import NewQLearn, InformedQL, LinearQ
+from algorithms import QLearn, LinearQLearning
 import matplotlib.pyplot as plt
 from tqdm.auto import tqdm
 import numpy as np
 import seaborn as sns
 import pandas as pd
+import wandb
+import joblib
+import os
+from utils import plotting
 
 class Simulator():
-    def __init__(self, algs, job_size, episodes, tradeoff, learning_rate, iterations, verbose, normalized, seed=None):
+    def __init__(self, algs, job_size, episodes, alpha, lr, iterations, verbose, normalized, seed=None):
         self.seed = np.random.randint(0, 2**36 - 1) if seed is None else seed
-        
-        self.energy = DataLoader(seed=seed)
         self.job_size = job_size
         self.episodes = episodes
-        self.tradeoff = tradeoff
-        self.lr = learning_rate
+        self.alpha = alpha
+        self.lr = lr
         self.iterations = iterations
         self.verbose = verbose
         self.normalize = normalized
         self.train_size = 0.8
+        
+        # Flags
+        self.wandb_log = False
 
-        # self.train_data, self.val_data = self.energy.split_data(train_size=0.8)
-        self.losses = []
+        # Environment
+        dataloader = DataLoader(seed=seed)
+        env = JobEnv(job_size, alpha, dataloader, self.train_size)
 
-        mdp = JobEnv(job_size, self.energy.data, self.train_size)
+        # Algorithms
         self.algs = {}
         for a in algs:
-            self.algs[a] = self._create_alg(a, mdp)
+            self.algs[a] = self._create_alg(a, env, lr)
 
-        self.losses = np.empty((len(self.algs), self.iterations, self.episodes))
-        self.optimal_losses = np.empty((len(self.algs), self.episodes))
+        # Trackers
+        num_algs = len(self.algs)
+        self.losses = np.empty((num_algs, episodes))
+        self.carbons = np.empty((num_algs, episodes))
+        self.optimal_losses = np.empty((num_algs, episodes))
+        self.optimal_carbons = np.empty((num_algs, episodes))
+        self.regrets = np.empty((num_algs, episodes))
 
         self.intensities = np.empty((len(self.algs)), dtype=object)
         self.max_time = 0
@@ -39,14 +50,13 @@ class Simulator():
         self.temp_cum_regret = np.zeros((len(self.algs), self.episodes))
         self.instant_regret = np.zeros((len(self.algs), self.episodes))
 
-    def _create_alg(self, alg_name, env):
+    def _create_alg(self, alg_name, env, lr):
         alg_map = {
-            "ql": ("Q-Learning", NewQLearn),
-            "iql": ("Informed Q-Learning", InformedQL),
-            "linq": ("Linear Q-Learning", LinearQ),
+            "ql": ("Q-Learning", QLearn),
+            "lfa-ql": ("Linear Q-Learning", LinearQLearning),
         }
         title, algorithm_class = alg_map.get(alg_name)
-        algorithm = algorithm_class(env, lr=self.lr, tradeoff=self.tradeoff)
+        algorithm = algorithm_class(env, lr=lr)
         return {'title': title, 'alg': algorithm}
     
     def _pad_data(self, data, max_length):
@@ -61,47 +71,83 @@ class Simulator():
         ])
 
     def train(self):
-        for alg_i, (_, alg_dict) in enumerate(self.algs.items()):
+        print("Start training...")
+        for alg_i, (alg_title, alg_dict) in enumerate(self.algs.items()):
+            agent = alg_dict['alg']
+            if self.wandb_log:
+                config = {
+                    "learning_rate": agent.lr,
+                    "episodes": self.episodes,
+                    "job_size": self.job_size,
+                    "alpha": self.alpha
+                }
+                wandb.init(
+                    project="carbon-scheduling",
+                    name=f'{alg_title}_job{self.job_size}_alpha{self.alpha}',
+                    config=config
+                )
+
             print(f"[{alg_dict['title']}] {self.episodes} episodes. LR = {self.lr}")
 
-            iter_intensities = []
+            episodes = tqdm(range(self.episodes)) if self.verbose else range(self.episodes)
 
-            for iter in range(self.iterations):
-                if self.verbose: 
-                    print(f"Iteration {iter}")
+            for e in episodes:
+                loss, carbon, opt_carbon, regret = agent.train_episode(self.normalize, e)
 
-                ### Episode Loop
-                episodes = tqdm(range(self.episodes)) if self.verbose else range(self.episodes)
-                intensities = np.empty(self.episodes, dtype=object)
+                self.losses[alg_i][e] = loss
+                self.carbons[alg_i][e] = carbon
+                self.optimal_carbons[alg_i][e] = opt_carbon
+                self.regrets[alg_i][e] = regret
 
-                for ep_i in episodes:
-                    # ep_loss, opt_loss, regret, ep_intensities, ep_time = alg_dict['alg'].run_episode(start_idx, ep_i, train=True)
-                    ep_loss, ep_carbon, opt_carbon, ep_time = alg_dict['alg'].train_episode(self.normalize, ep_i)
-
-                    if ep_time > self.max_time: # update max time, used for padding
-                        self.max_time = ep_time
-
-                    ### Trackers
-                    intensities[ep_i] = ep_loss
-                    self.losses[alg_i][iter][ep_i] = ep_loss
-
-                    # self.losses[alg_i][iter][ep_i] = ep_loss
-                    # self.optimal_losses[alg_i, ep_i] = opt_loss
-
-                iter_intensities.append(intensities)
-
-                # Pad intensities for current iteration
-                # padded_intensities = self._pad_data(intensities, self.max_time + 1)
-                # iter_intensities.append(np.nanmean(padded_intensities, axis=0))
-
+                if self.wandb_log:
+                    wandb.log({
+                        "episode": e,
+                        "train_loss": loss,
+                        "carbon": carbon,
+                        "optimal_carbon": opt_carbon,
+                        "regret": regret
+                    })
+        
             if self.verbose:
                 print(f"[{alg_dict['title']}] End")
 
-            # self.intensities[alg_i] = self._pad_data(iter_intensities, self.max_time + 1)
+            self._save_model(agent, alg_title)
+        print("End training...")
+
+    def evaluate(self):
+
+        for alg_i, (alg_title, alg_dict) in enumerate(self.algs.items()):
+            print(f"Evaluating {alg_title}...")
+            agent = alg_dict['alg']
+            total_loss, action_history, intensity_history, state_history, loss_history, q_vals_history, total_carbon = agent.evaluate(self.normalize)
+
+            plotting.plot_evaluation_results(
+                actions=action_history,
+                intensities=intensity_history,
+                losses=loss_history,
+                q_vals=q_vals_history
+            )
+            print(f"[{alg_title}] Total loss: {total_loss:.2f}")
+            print(f"[{alg_title}] Total Carbon: {total_carbon:.5f}")
+            print(f"[{alg_title}] Job completed in {len(action_history)} hours")
+            plt.show()
+
+
+    def _save_model(self, model, model_name):
+        model_dir = f"models"
+        os.makedirs(model_dir, exist_ok=True)
+        model_path = os.path.join(model_dir, f"{model_name}.pkl")
         
-        # Average over iterations
-        self.losses = np.array([np.mean(self.losses[alg_i], axis=0) for alg_i in range(len(self.algs))])
-        # self.intensities = np.array([np.nanmean(self.intensities[alg_i], axis=0) for alg_i in range(len(self.algs))])
+        # Dump model
+        weights = model.get_weights()
+        joblib.dump(weights, model_path)
+
+    def _load_model(self, model, model_name):
+        model_path = f"models/{model_name}.pkl"
+        if os.path.exists(model_path):
+            weights = joblib.load(model_path)
+            model.load_weights(weights)
+            print(f"Loaded saved {model_name} model")
 
     def plot_losses(self):
         sns.set_theme(style="darkgrid")
