@@ -1,12 +1,11 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import random
-import pandas as pd
+import wandb
 from collections import deque
 from tqdm import tqdm
 from utils import generic, plotting
 from mdps import JobEnv
-from collections import deque
 from datasets import DataLoader
 
 class LinearFunctionApproximator:
@@ -16,7 +15,7 @@ class LinearFunctionApproximator:
     def predict(self, features):
         return np.dot(features, self.weights)
     
-    def update(self, features, error, lr, ep):
+    def update(self, features, error, lr):
         self.weights += lr * error * features
 
 class LinearQLearning():
@@ -105,14 +104,14 @@ class LinearQLearning():
             if not done:
                 next_features = self._get_features(next_state)   # Get features from next state
                 next_q_vals = [approx.predict(next_features) for approx in self.approximators]
-                target = loss + min(next_q_vals) # FIXME: This is giving [nan, nan]
+                target = loss + min(next_q_vals)
             else:
                 target = loss
             
-            curr_q_val = self.approximators[action].predict(features) # FIXME: This is giving [nan, nan]
+            curr_q_val = self.approximators[action].predict(features)
             td_error = target - curr_q_val
 
-            self.approximators[action].update(features, td_error, self.lr, ep)
+            self.approximators[action].update(features, td_error, self.lr)
 
     
     def train_episode(self, normalize, episode):
@@ -156,6 +155,9 @@ class LinearQLearning():
 
         # Epsilon Decay
         if self.epsilon > self.epsilon_min:
+            # FIXME: Play around with the decaying
+            # self.epsilon = max(self.epsilon_min, self.epsilon - ((1-self.epsilon_min)/4000)) # Constant rate
+            # self.epsilon = self.epsilon_min + (1.0 - self.epsilon_min) * np.exp(-0.0001 * episode) # "Inverse step decay", faster to start and slows down.
             self.epsilon *= self.epsilon_decay
 
         if episode % 100 == 0:
@@ -201,7 +203,7 @@ class LinearQLearning():
             action_history.append(action)
 
             # Perform action
-            _, loss, done = self.env.step(action)
+            _, loss, done = self.env.step(action, track=True)
             loss_history.append(loss)
             total_loss += loss
             if action == self.env.run:
@@ -209,15 +211,24 @@ class LinearQLearning():
 
         return total_loss, action_history, intensity_history, state_history, loss_history, q_vals_history, total_carbon
 
+    def get_weights(self):
+        return self.approximators
+    
+    def load_weights(self, weights):
+        self.approximators = weights
+
 def main():
     print("Running LFA_QL")
     # Hyper Parameters
-    job_size = 30
+    job_size = 10
     lr = 1e-5
-    tradeoff = 0.05
-    episodes = 4000
+    episodes = 2000
     normalize = True
-    alpha = 4
+    alpha = 5
+
+    # Flags
+    log_wandb = False
+    show_plots = True
 
     # Environment Parameters
     train_size = 0.8
@@ -225,14 +236,28 @@ def main():
     env = JobEnv(job_size, alpha, dataloader, train_size)
 
     # Agent
-    agent = LinearQLearning(env, lr=lr, tradeoff=tradeoff)
+    agent = LinearQLearning(env, lr=lr)
+
+    if log_wandb:
+        config={
+                "learning_rate": lr,
+                "episodes": episodes,
+                "job_size": job_size,
+                "alpha": alpha,
+                "epsilon_min": agent.epsilon_min,
+                # "epsilon_decay": agent.decay_rate
+            }
+        wandb.init(
+            project="carbon-scheduling",
+            name=f"lfa_q_learning_job{job_size}_alpha{alpha}",
+            config=config
+        )
 
     # Tracking
     losses = []
     carbons = []
     optimal_carbons = []
     regrets = []
-    cum_regret = []
 
     ## Training
     for e in tqdm(range(episodes)):
@@ -242,31 +267,42 @@ def main():
         optimal_carbons.append(opt_carbon)
         regrets.append(regret)
 
-        if e == 0:
-            cum_regret.append(regret)
-        else:
-            cum_regret.append(cum_regret[-1] + regret)
+        if log_wandb:
+            wandb.log({
+                "episode": e,
+                "loss": loss,
+                "carbon": carbon,
+                "optimal_carbon": opt_carbon,
+                "regret": regret,
+                "epsilon": agent.epsilon
+            })
+
 
     ## Evaluate
     total_loss, action_history, intensity_history, state_history, loss_history, q_vals_history, total_carbon = agent.evaluate(normalize)
+    import matplotlib.pyplot as plt
+    plt.plot(env.lambdas)
+    plt.title("Eval Lambdas")
 
-    plotting.plot_training_progress(losses)
+    if show_plots:
+        # plt.figure(1)
+        plotting.plot_training_progress(losses)
 
+        # plt.figure(2)
+        plotting.plot_training_carbons(carbons, optimal_carbons)
 
-    plotting.plot_training_carbons(carbons, optimal_carbons)
-    plt.show()
+        # plt.figure(3)
+        plotting.plot_regret(regrets)
 
-    plotting.plot_regret(regrets, cum_regret)
-    plt.show()
+        print(f"Total loss: {total_loss:.2f}")
+        print(f"Total Carbon: {total_carbon:.5f}")
+        print(f"Job completed in {len(action_history)} hours")
+        # plt.figure(4)
+        plotting.plot_evaluation_results(action_history, intensity_history, loss_history, q_vals_history)
 
-    print(f"Total loss: {total_loss:.2f}")
-    print(f"Total Carbon: {total_carbon:.5f}")
-    print(f"Job completed in {len(action_history)} hours")
-    plotting.plot_evaluation_results(action_history, intensity_history, loss_history, q_vals_history)
-    plt.show()
-
-    plotting.visualize_weights(agent.feature_names, agent.approximators)
-    plt.show()
+        # plt.figure(5)
+        plotting.visualize_weights(agent.feature_names, agent.approximators)
+        plt.show()
 
 if __name__ == '__main__':
     main()

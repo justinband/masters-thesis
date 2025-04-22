@@ -72,6 +72,7 @@ class QLearn(LearningAlg):
 
         done = False
         total_loss = 0
+        total_carbon = 0
         intensity_history = []
         state_history = []
         action_history = []
@@ -98,12 +99,20 @@ class QLearn(LearningAlg):
             _, loss, done = self.env.step(action)
             loss_history.append(loss)
             total_loss += loss
+            if action == self.env.run:
+                total_carbon += curr_intenisty
 
             if self.env.time >= max_time:
                 print(f"Evaluation took longer than {max_time} hours")
                 done = True
 
-        return total_loss, action_history, intensity_history, state_history, loss_history, q_vals_history
+        return total_loss, action_history, intensity_history, state_history, loss_history, q_vals_history, total_carbon
+
+    def get_weights(self):
+        return self.q
+    
+    def load_weights(self, weights):
+        self.q = weights
 
 def main():
     print("Running QL")

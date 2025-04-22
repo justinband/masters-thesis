@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import seaborn as sns
 
 def plot_training_carbons(carbons, optimal_carbons):
     """
@@ -9,6 +10,7 @@ def plot_training_carbons(carbons, optimal_carbons):
         carbons: list of carbon intensities incurred during training
         optimal_carbons: optimal carbons based on other derivations
     """
+    plot_styling()
     plt.figure(figsize=(10, 6))
     plt.plot(carbons, alpha=0.5, label='Agent Carbon')
     plt.plot(optimal_carbons, alpha=0.5, label='Optimal Carbon')
@@ -35,6 +37,7 @@ def plot_training_progress(losses):
     Args:
         losses: list of losses from training
     """
+    plot_styling()
     plt.figure(figsize=(10, 6))
     plt.plot(losses)
     plt.xlabel('Episode')
@@ -51,26 +54,29 @@ def plot_training_progress(losses):
     plt.legend()
     return plt.gcf()
 
-def plot_regret(regrets, cum_regret):
+def plot_regret(regrets):
     """
     Plot the training regret and the cumulative regret
 
     Args:
         regrets: regrets per episode
     """
-    plt.figure(figsize=(10, 6))
-    plt.plot(regrets)
-    plt.xlabel('Episode')
-    plt.ylabel('Regret')
-    plt.title('Training Regret')
+    plot_styling()
+    cumulative_regret = np.cumsum(regrets)
 
-    plt.grid(True)
-    plt.tight_layout()
-    plt.legend()
-    plt.show()
+    # plt.figure(figsize=(10, 6))
+    # plt.plot(regrets)
+    # plt.xlabel('Episode')
+    # plt.ylabel('Regret')
+    # plt.title('Training Regret')
+
+    # plt.grid(True)
+    # plt.tight_layout()
+    # plt.legend()
+    # plt.show()
 
     plt.figure(figsize=(10, 6))
-    plt.plot(cum_regret)
+    plt.plot(cumulative_regret, label='Cumulative Regret')
     plt.xlabel('Episode')
     plt.ylabel('Cumulative Regret')
     plt.title('Training Cumulative Regret')
@@ -91,12 +97,17 @@ def plot_evaluation_results(actions, intensities, losses, q_vals):
         losses: list of losses incurred by the agent
         q_vals: q-values of the model as actions are executed
     """
-    fig, axes = plt.subplots(4, 1, figsize=(12, 16), sharex=True)
+    plot_styling()
+    fig, axes = plt.subplots(4, 1, figsize=(10, 10), sharex=True)
 
     # Plot carbon intensity
+    run_indices = np.flatnonzero(actions)
+    intensities = np.array(intensities)
     axes[0].plot(intensities, 'g-')
+    axes[0].plot(run_indices, intensities[run_indices], 'ro', label='Run Actions')
     axes[0].set_title('Carbon Intensity')
     axes[0].set_ylabel('Intensity')
+    axes[0].legend()
     axes[0].grid(True)
     
     # Plot actions (Run/Pause)
@@ -107,9 +118,12 @@ def plot_evaluation_results(actions, intensities, losses, q_vals):
     axes[1].grid(True)
     
     # Plot losses
-    axes[2].plot(losses, 'r-')
+    losses = np.array(losses)
+    axes[2].plot(losses, 'b-')
+    axes[2].plot(run_indices, losses[run_indices], 'ro', label='Run Actions')
     axes[2].set_title('Losses')
     axes[2].set_ylabel('Loss')
+    axes[2].legend()
     axes[2].grid(True)
     
     # Plot Q-values
@@ -134,6 +148,7 @@ def visualize_weights(feature_names, approximators):
         feature_names: list of the features names
         approximators: all function approximators, these must contain the weights
     """
+    plot_styling()
     plt.figure(figsize=(12, 10))
 
     for i, action_name in enumerate(["Pause", "Run"]):
@@ -150,3 +165,6 @@ def visualize_weights(feature_names, approximators):
         
     plt.tight_layout()
     return plt.gcf()
+
+def plot_styling():
+    sns.set_theme(style='darkgrid')

@@ -1,5 +1,6 @@
 import numpy as np
 import math
+import matplotlib.pyplot as plt
 from datasets import DataLoader
 
 class JobEnv():
@@ -19,7 +20,9 @@ class JobEnv():
 
         # Calculate Lambda
         self.alpha = alpha
-        self.lamb = self._get_lambda()
+        self.carbon_alpha = self.dataloader.get_quantile_from_data(alpha)
+        self.lamb = self._get_lambda(state=0)
+        self.lambdas = []
 
         self.complete = False
         self.is_normal = None
@@ -42,15 +45,14 @@ class JobEnv():
         assert self.is_normal is not None, "JobEnv not correctly initialized"
         return 'normalized' if self.is_normal else 'carbon_intensity'
     
-    def _get_lambda(self):
-        carbon_alpha = self.dataloader.get_quantile_from_data(self.alpha)
-        return 1/self.alpha * carbon_alpha * self.job_size
+    def _get_lambda(self, state):
+        return 1/self.alpha * self.carbon_alpha * (state + 1)
+        # return 1/self.alpha * self.carbon_alpha * self.job_size
     
     def _get_T_alpha(self, sum_data):
         # T <= [alpha * (1/carbon_alpha) * sum^N_{i=1} c_i] + N
-        carbon_alpha = self.dataloader.get_quantile_from_data(self.alpha)
         N = self.job_size
-        T = (self.alpha * (1/carbon_alpha) * sum_data) + N
+        T = (self.alpha * (1/self.carbon_alpha) * sum_data) + N
         return T
 
     def calc_opt_carbon(self, start_idx):
@@ -80,15 +82,16 @@ class JobEnv():
             intensity = T_carbon[t]
             T_prev = t - 1
             N_prev = state_tracking[-1] if state_tracking else 0
+            lamb = self._get_lambda(state)
 
             if t in run_indices:
-                loss = self._calc_run_loss(self.lamb, T_prev, N_prev, intensity)
+                loss = self._calc_run_loss(lamb, T_prev, N_prev, intensity)
                 optimal_carbon += intensity
 
                 state_tracking.append(state)
                 state += 1
             else:
-                loss = self._calc_pause_loss(self.lamb, N_prev)
+                loss = self._calc_pause_loss(lamb, N_prev)
                 state_tracking.append(state)
 
             optimal_loss += loss
@@ -98,10 +101,12 @@ class JobEnv():
 
         return optimal_loss, optimal_carbon, T
 
-    def _calculate_loss(self, action, idx):
+    def _calculate_loss(self, action, idx, track=False):
         data = self._get_dataset()
         intensity_t = data.iloc[idx]
-        lamb = self.lamb
+        lamb = self._get_lambda(self.job_state)
+        if track:
+            self.lambdas.append(lamb)
         T_prev = self.time - 1
         N_prev = self.job_state_tracking[-1] if self.job_state_tracking else 0
 
@@ -135,8 +140,8 @@ class JobEnv():
         data = self._get_dataset()
         return data.iloc[self.curr_idx]
     
-    def step(self, action):
-        loss = self._calculate_loss(action, self.curr_idx)
+    def step(self, action, track=False):
+        loss = self._calculate_loss(action, self.curr_idx, track)
 
         if action == self.run and self.job_state == self.job_size - 1:
             self.complete = True
