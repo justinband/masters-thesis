@@ -55,9 +55,10 @@ class QLearn(LearningAlg):
 
         return total_loss, total_carbon, optimal_carbon, regret
     
-    def evaluate(self):
+    def evaluate(self, start_idx=None):
         self.env.test()
-        start_idx = self.env.get_random_index()
+        if start_idx is None:
+            start_idx = self.env.get_random_index()
         state = self.env.reset(start_idx)
 
         done = False

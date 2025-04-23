@@ -115,10 +115,16 @@ class Simulator():
         print("End training...")
 
     def evaluate(self):
+        ##### TESTING
+        ##### FIXME: THIS SHOULD BE REMOVED
+        start_idx = 6500
+        #####
+        #####
+
         for alg_i, (alg_title, alg_dict) in enumerate(self.algs.items()):
             print(f"Evaluating {alg_title}...")
             agent = alg_dict['alg']
-            total_loss, action_history, intensity_history, state_history, loss_history, q_vals_history, total_carbon = agent.evaluate()
+            total_loss, action_history, intensity_history, state_history, loss_history, q_vals_history, total_carbon = agent.evaluate(start_idx)
 
             plotting.plot_evaluation_results(
                 actions=action_history,

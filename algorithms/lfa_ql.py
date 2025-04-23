@@ -160,7 +160,6 @@ class LinearQLearning(LearningAlg):
         self.env.test()
         if start_idx is None:
             start_idx = self.env.get_random_index()
-        start_idx = 6500
         self.env.reset(start_idx)
         done = False
         total_loss = 0
