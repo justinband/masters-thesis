@@ -30,7 +30,7 @@ if __name__ == "__main__":
     parser.add_argument("-j", "--job-size", type=int, default=job_size, help="Size of a job")
     parser.add_argument("-a", "--alpha", type=int, default=alpha, help="Tradeoff of how long we're willing to wait.")
     parser.add_argument("-i", "--iterations", type=int, default=1,help="Number of iterations to run training over. Results are averaged.")
-    parser.add_argument("-n", "--normalize", type=str_to_bool, default=True, help="Uses normalized data in [0,1] when true, otherwise uses original data")
+    parser.add_argument("-n", "--normalize", type=str_to_bool, default=normalize, help="Uses normalized data in [0,1] when true, otherwise uses original data")
     parser.add_argument("-lr", "--learning_rate", type=float, default=lr, help='Sets the learning rate.')
 
     parser.add_argument("-s", "--seed", type=int, help="Defines a seed. Useful for reproduction.")

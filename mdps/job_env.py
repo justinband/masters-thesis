@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 from datasets import DataLoader
 
 class JobEnv():
-    def __init__(self, job_size, alpha, dataloader: DataLoader, train_size=0.75, start_idx=0):
+    def __init__(self, job_size, alpha, dataloader: DataLoader, normalize, train_size=0.75, start_idx=0):
         self.job_size = job_size  # num states
         self.nA = 2     # num actions
         self.job_state = 0      # intitial state
@@ -25,7 +25,7 @@ class JobEnv():
         self.lambdas = []
 
         self.complete = False
-        self.is_normal = None
+        self.is_normal = normalize
         self.is_train = True
 
         # Energy data
@@ -163,11 +163,10 @@ class JobEnv():
     def test(self):
         self.is_train = False
   
-    def reset(self, start_idx, is_normal):
+    def reset(self, start_idx):
         self.job_state = 0
         self.job_state_tracking = []
         self.time = 0
         self.curr_idx = start_idx
         self.complete = False
-        self.is_normal = is_normal
         return self.job_state

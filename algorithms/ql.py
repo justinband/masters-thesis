@@ -23,10 +23,10 @@ class QLearn(LearningAlg):
         q_delta = np.min(self.q[s_prime]) - self.q[state, action]
         self.q[state, action] += self.lr * (loss + q_delta)
 
-    def train_episode(self, normalize, episode):
+    def train_episode(self, episode):
         self.env.train()
         start_idx = self.env.get_random_index()
-        state = self.env.reset(start_idx, normalize)
+        state = self.env.reset(start_idx)
         done = False
 
         total_loss = 0
@@ -55,10 +55,10 @@ class QLearn(LearningAlg):
 
         return total_loss, total_carbon, optimal_carbon, regret
     
-    def evaluate(self, normalize):
+    def evaluate(self):
         self.env.test()
         start_idx = self.env.get_random_index()
-        state = self.env.reset(start_idx, normalize)
+        state = self.env.reset(start_idx)
 
         done = False
         total_loss = 0
@@ -120,7 +120,7 @@ def main():
     energy_df = DataLoader().data
     # energy_df = DataLoader(seed=seed).data
     # np.random.seed(seed)
-    env = JobEnv(job_size, energy_df, train_size)
+    env = JobEnv(job_size, energy_df, normalize, train_size)
 
     # Agent
     agent = QLearn(env, lr=alpha, tradeoff=tradeoff)
@@ -133,14 +133,14 @@ def main():
 
     ## Training
     for e in tqdm(range(episodes)):
-        loss, carbon, opt_carbon, regret = agent.train_episode(normalize, e)
+        loss, carbon, opt_carbon, regret = agent.train_episode(e)
         losses.append(loss)
         carbons.append(carbon)
         optimal_carbons.append(opt_carbon)
         regrets.append(regret)
 
     ## Evaluate
-    total_loss, action_history, intensity_history, state_history, loss_history, q_vals_history = agent.evaluate(normalize)
+    total_loss, action_history, intensity_history, state_history, loss_history, q_vals_history = agent.evaluate()
 
     plotting.plot_training_progress(losses)
     plt.show()

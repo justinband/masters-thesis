@@ -28,7 +28,7 @@ class Simulator():
 
         # Environment
         dataloader = DataLoader(seed=seed)
-        env = JobEnv(job_size, alpha, dataloader, self.train_size)
+        env = JobEnv(job_size, alpha, dataloader, self.normalize, self.train_size)
 
         # Algorithms
         self.algs = {}
@@ -92,7 +92,7 @@ class Simulator():
             episodes = tqdm(range(self.episodes)) if self.verbose else range(self.episodes)
 
             for e in episodes:
-                loss, carbon, opt_carbon, regret = agent.train_episode(self.normalize, e)
+                loss, carbon, opt_carbon, regret = agent.train_episode(e)
 
                 self.losses[alg_i][e] = loss
                 self.carbons[alg_i][e] = carbon
@@ -115,11 +115,10 @@ class Simulator():
         print("End training...")
 
     def evaluate(self):
-
         for alg_i, (alg_title, alg_dict) in enumerate(self.algs.items()):
             print(f"Evaluating {alg_title}...")
             agent = alg_dict['alg']
-            total_loss, action_history, intensity_history, state_history, loss_history, q_vals_history, total_carbon = agent.evaluate(self.normalize)
+            total_loss, action_history, intensity_history, state_history, loss_history, q_vals_history, total_carbon = agent.evaluate()
 
             plotting.plot_evaluation_results(
                 actions=action_history,

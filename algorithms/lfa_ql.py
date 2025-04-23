@@ -108,10 +108,10 @@ class LinearQLearning(LearningAlg):
             self.approximators[action].update(features, td_error, self.lr)
 
     
-    def train_episode(self, normalize, episode):
+    def train_episode(self, episode):
         self.env.train()
         start_idx = self.env.get_random_index()
-        self.env.reset(start_idx, normalize)
+        self.env.reset(start_idx)
         done = False
         total_loss = 0
         total_carbon = 0
@@ -151,7 +151,7 @@ class LinearQLearning(LearningAlg):
 
         return total_loss, total_carbon, optimal_carbon, regret
     
-    def evaluate(self, normalize, start_idx=None):
+    def evaluate(self, start_idx=None):
         """
         Given a trained policy, evaluates it. This uses the test set defined
         on environment creation.
@@ -161,7 +161,7 @@ class LinearQLearning(LearningAlg):
         if start_idx is None:
             start_idx = self.env.get_random_index()
         start_idx = 6500
-        self.env.reset(start_idx, normalize)
+        self.env.reset(start_idx)
         done = False
         total_loss = 0
         total_carbon = 0
@@ -219,7 +219,7 @@ def main():
     # Environment Parameters
     train_size = 0.8
     dataloader = DataLoader()
-    env = JobEnv(job_size, alpha, dataloader, train_size)
+    env = JobEnv(job_size, alpha, dataloader, normalize, train_size)
 
     # Agent
     agent = LinearQLearning(env, lr=lr)
@@ -265,7 +265,7 @@ def main():
 
 
     ## Evaluate
-    total_loss, action_history, intensity_history, state_history, loss_history, q_vals_history, total_carbon = agent.evaluate(normalize)
+    total_loss, action_history, intensity_history, state_history, loss_history, q_vals_history, total_carbon = agent.evaluate()
     import matplotlib.pyplot as plt
     plt.plot(env.lambdas)
     plt.title("Eval Lambdas")
