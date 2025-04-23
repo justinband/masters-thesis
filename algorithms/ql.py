@@ -7,15 +7,9 @@ from datasets import DataLoader
 from utils import generic, plotting
 
 class QLearn(LearningAlg):
-
-    def __init__(self, env: JobEnv, lr=0.01, epsilon=1):
-        self.env = env
-        self.lr = lr
-        self.epsilon = epsilon
-        self.epsilon_min = 0.01
-        self.epsilon_decay = 0.99
+    def __init__(self, env: JobEnv, lr=0.01, epsilon=1, epsilon_min=0.01, epsilon_decay=0.99):
+        super().__init__(env, lr, epsilon, epsilon_min, epsilon_decay)
         self.q = np.zeros((self.env.job_size, self.env.nA))
-
         self.action_dim = [0, 1]
 
     def _choose_action(self, state):
@@ -26,7 +20,6 @@ class QLearn(LearningAlg):
             return np.random.choice(min_q)
         
     def _update_q_value(self, state, action, loss, s_prime):
-        # Loss should come from job_env
         q_delta = np.min(self.q[s_prime]) - self.q[state, action]
         self.q[state, action] += self.lr * (loss + q_delta)
 
@@ -54,11 +47,8 @@ class QLearn(LearningAlg):
             state = next_job_state
 
         optimal_loss, optimal_carbon, optimal_time = self.env.calc_opt_carbon(start_idx)
-
         regret = generic.calculate_regret(total_loss, optimal_loss)
-
-        if self.epsilon > self.epsilon_min:
-            self.epsilon *= self.epsilon_decay
+        self.decay_epsilon()
         
         if episode % 100 == 0:
             print(f"Episode: {episode}, Total Loss: {total_loss:.2f}, Epsilon: {self.epsilon:.2f}")

@@ -4,6 +4,7 @@ import random
 import wandb
 from collections import deque
 from tqdm import tqdm
+from algorithms import LearningAlg
 from utils import generic, plotting
 from mdps import JobEnv
 from datasets import DataLoader
@@ -18,16 +19,10 @@ class LinearFunctionApproximator:
     def update(self, features, error, lr):
         self.weights += lr * error * features
 
-class LinearQLearning():
-    def __init__(self, env: JobEnv, lr=0.01, epsilon = 1):
-        self.env = env
-        self.lr = lr
-        self.epsilon = epsilon
-        self.epsilon_min = 0.01
-        self.epsilon_decay = 0.99
-
-        self.max_time = 500 # TODO: Fix this. Maybe in relation to upper-bound?
-
+class LinearQLearning(LearningAlg):
+    def __init__(self, env: JobEnv, lr=0.01, epsilon = 1, epsilon_min = 0.01, epsilon_decay=0.99):
+        super().__init__(env, lr, epsilon, epsilon_min, epsilon_decay)
+        self.max_time = 500
         self.state_dim = 3
         self.feature_dim = 4
         self.feature_names = [
@@ -46,7 +41,6 @@ class LinearQLearning():
             LinearFunctionApproximator(self.feature_dim),
             LinearFunctionApproximator(self.feature_dim)
         ]
-
         self.memory = deque(maxlen=1000)
         self.batch_size = 32
 
@@ -132,7 +126,6 @@ class LinearQLearning():
             if action == self.env.run:
                 total_carbon += curr_intensity
 
-
             # Perform action
             _, loss, done = self.env.step(action)
 
@@ -150,15 +143,8 @@ class LinearQLearning():
 
         # Regret
         optimal_loss, optimal_carbon, optimal_time = self.env.calc_opt_carbon(start_idx=start_idx)
-
         regret = generic.calculate_regret(total_loss, optimal_loss)
-
-        # Epsilon Decay
-        if self.epsilon > self.epsilon_min:
-            # FIXME: Play around with the decaying
-            # self.epsilon = max(self.epsilon_min, self.epsilon - ((1-self.epsilon_min)/4000)) # Constant rate
-            # self.epsilon = self.epsilon_min + (1.0 - self.epsilon_min) * np.exp(-0.0001 * episode) # "Inverse step decay", faster to start and slows down.
-            self.epsilon *= self.epsilon_decay
+        self.decay_epsilon()
 
         if episode % 100 == 0:
             print(f"Episode: {episode}, Total Loss: {total_loss:.2f}, Optimal Loss: {optimal_loss:.2f}, TimeDiff: {optimal_time - self.env.time}, Epsilon: {self.epsilon:.2f}")
