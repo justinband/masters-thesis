@@ -15,6 +15,13 @@ class LearningAlg():
         """
         pass
 
+    @abstractmethod
+    def evaluate(self, start_idx=None):
+        """
+        Must be implemented for algorithmic evaluation.
+        """
+        pass
+
     def decay_epsilon(self):
         """
         Decays epsilon according to a standardized approach
