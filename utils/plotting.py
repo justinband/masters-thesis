@@ -86,7 +86,7 @@ def plot_regret(regrets):
     plt.legend()
     return plt.gcf()
 
-def plot_evaluation_results(actions, intensities, losses, q_vals):
+def plot_evaluation_results(actions, intensities, losses, q_vals, title=None):
     """
     Plots details for an evaluation. Notably, the actions taken at intervals,
     with corresponding intensities, losses, and q-values.
@@ -99,6 +99,9 @@ def plot_evaluation_results(actions, intensities, losses, q_vals):
     """
     plot_styling()
     fig, axes = plt.subplots(4, 1, figsize=(10, 10), sharex=True)
+
+    if title is not None:
+        fig.suptitle(title, fontsize=18)
 
     # Plot carbon intensity
     run_indices = np.flatnonzero(actions)
@@ -137,7 +140,6 @@ def plot_evaluation_results(actions, intensities, losses, q_vals):
     axes[3].legend()
     axes[3].grid(True)
     
-    plt.tight_layout()
     return plt.gcf()
 
 def visualize_weights(feature_names, approximators):

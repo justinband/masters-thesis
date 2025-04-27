@@ -33,6 +33,3 @@ class RunAgent():
             total_carbon += curr_intenisty
             
         return total_loss, action_history, intensity_history, state_history, loss_history, [], total_carbon
-
-        
-    

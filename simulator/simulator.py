@@ -1,6 +1,6 @@
 from datasets import DataLoader
 from mdps import JobEnv
-from algorithms import QLearn, LinearQLearning
+from algorithms import QLearn, LinearQLearning, RunAgent
 import matplotlib.pyplot as plt
 from tqdm.auto import tqdm
 import numpy as np
@@ -10,6 +10,8 @@ import wandb
 import joblib
 import os
 from utils import plotting
+import pprint
+from utils import generic
 
 class Simulator():
     def __init__(self, algs, job_size, episodes, alpha, lr, iterations, verbose, normalized, seed=None):
@@ -28,12 +30,12 @@ class Simulator():
 
         # Environment
         dataloader = DataLoader(seed=seed)
-        env = JobEnv(job_size, alpha, dataloader, self.normalize, self.train_size)
+        self.env = JobEnv(job_size, alpha, dataloader, self.normalize, self.train_size)
 
         # Algorithms
         self.algs = {}
         for a in algs:
-            self.algs[a] = self._create_alg(a, env, lr)
+            self.algs[a] = self._create_alg(a, self.env, self.lr)
 
         # Trackers
         num_algs = len(self.algs)
@@ -54,6 +56,7 @@ class Simulator():
         alg_map = {
             "ql": ("Q-Learning", QLearn),
             "lfa-ql": ("Linear Q-Learning", LinearQLearning),
+            "run-only": ("Run-Only Agent", RunAgent)
         }
         title, algorithm_class = alg_map.get(alg_name)
         algorithm = algorithm_class(env, lr=lr)
@@ -114,12 +117,24 @@ class Simulator():
             self._save_model(agent, alg_title)
         print("End training...")
 
+    def _add_baseline_alg(self):
+        agent = RunAgent(self.env)
+        key = 'run-agent'
+        value = {'title': 'Run-Only Agent', 'alg': agent}
+        self.algs.setdefault(key, value)
+
     def evaluate(self):
         ##### TESTING
         ##### FIXME: THIS SHOULD BE REMOVED
         start_idx = 6500
         #####
         #####
+
+        # Add run-only alg to the algorithms
+        self._add_baseline_alg()
+        print(self.algs)
+
+        results = {}
 
         for alg_i, (alg_title, alg_dict) in enumerate(self.algs.items()):
             print(f"Evaluating {alg_title}...")
@@ -130,13 +145,31 @@ class Simulator():
                 actions=action_history,
                 intensities=intensity_history,
                 losses=loss_history,
-                q_vals=q_vals_history
+                q_vals=q_vals_history,
+                title=alg_dict['title']
             )
             print(f"[{alg_title}] Total loss: {total_loss:.2f}")
             print(f"[{alg_title}] Total Carbon: {total_carbon:.5f}")
             print(f"[{alg_title}] Job completed in {len(action_history)} hours")
-            plt.show()
+            results[alg_title] = {
+                'loss': np.round(total_loss, 2),
+                'carbon': np.round(total_carbon, 5),
+                'hours': len(action_history)}
 
+        print("--- Results ---")
+        pprint.pprint(results)
+    
+        baseline = 'run-agent'
+        for key in results:
+            if key != baseline:
+                carbon_diff = generic.calculate_diff(results[baseline]['carbon'], results[key]['carbon'])
+                loss_diff = generic.calculate_diff(results[baseline]['loss'], results[key]['loss'])
+                # time_diff = generic.calculate_diff(results[baseline]['hours'], results[key]['hours'])
+                print(f'Loss difference from run-agent to {key} = {loss_diff}%')
+                print(f'Carbon difference from run-agent to {key} = {carbon_diff}%')
+                # print(f'Time difference from run-agent to {key} = {time_diff}')
+
+        plt.show()
 
     def _save_model(self, model, model_name):
         model_dir = f"models"

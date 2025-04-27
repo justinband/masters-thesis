@@ -22,7 +22,9 @@ if __name__ == "__main__":
     normalize = True
     lr = 1e-5
 
-    existing_algs = ['ql', 'lfa-ql']
+    existing_algs = ['ql',
+                     'lfa-ql',
+                     'run-only']
 
     parser = argparse.ArgumentParser(description="Run simulator with a specified algorithm.")
     parser.add_argument("algorithms", nargs="*", help=f"Algorithm to run. Options: {", ".join(existing_algs)}")
