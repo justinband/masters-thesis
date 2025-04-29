@@ -56,7 +56,7 @@ class QLearn(LearningAlg):
         return total_loss, total_carbon, optimal_carbon, regret
     
     def evaluate(self, start_idx=None):
-        self.env.test()
+        assert self.env.is_train == False
         if start_idx is None:
             start_idx = self.env.get_random_index()
         state = self.env.reset(start_idx)
@@ -70,8 +70,8 @@ class QLearn(LearningAlg):
         q_vals_history = []
         loss_history = []
 
-        for s in range(self.env.job_size):
-            print(f'Q in {s}: {self.q[s]}')
+        # for s in range(self.env.job_size):
+            # print(f'Q in {s}: {self.q[s]}')
 
         max_time = 1500
 

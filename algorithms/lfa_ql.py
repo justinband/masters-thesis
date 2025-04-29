@@ -156,8 +156,7 @@ class LinearQLearning(LearningAlg):
         Given a trained policy, evaluates it. This uses the test set defined
         on environment creation.
         """
-        print("Beginning Evaluation...")
-        self.env.test()
+        assert self.env.is_train == False
         if start_idx is None:
             start_idx = self.env.get_random_index()
         self.env.reset(start_idx)

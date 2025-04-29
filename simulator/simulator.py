@@ -7,11 +7,8 @@ import numpy as np
 import seaborn as sns
 import pandas as pd
 import wandb
-import joblib
-import os
-from utils import plotting
-import pprint
-from utils import generic
+from . import evaluator
+from . import utils
 
 class Simulator():
     def __init__(self, algs, job_size, episodes, alpha, lr, iterations, verbose, normalized, seed=None):
@@ -114,78 +111,13 @@ class Simulator():
             if self.verbose:
                 print(f"[{alg_dict['title']}] End")
 
-            self._save_model(agent, alg_title)
+            utils.save_model(agent, alg_title)
         print("End training...")
 
-    def _add_baseline_alg(self):
-        agent = RunAgent(self.env)
-        key = 'run-agent'
-        value = {'title': 'Run-Only Agent', 'alg': agent}
-        self.algs.setdefault(key, value)
+    def evaluate(self, iterations=1000):
+        self.env.test()
+        evaluator.evaluate(self.env, iterations, self.algs) 
 
-    def evaluate(self):
-        ##### TESTING
-        ##### FIXME: THIS SHOULD BE REMOVED
-        start_idx = 6500
-        #####
-        #####
-
-        # Add run-only alg to the algorithms
-        self._add_baseline_alg()
-        print(self.algs)
-
-        results = {}
-
-        for alg_i, (alg_title, alg_dict) in enumerate(self.algs.items()):
-            print(f"Evaluating {alg_title}...")
-            agent = alg_dict['alg']
-            total_loss, action_history, intensity_history, state_history, loss_history, q_vals_history, total_carbon = agent.evaluate(start_idx)
-
-            plotting.plot_evaluation_results(
-                actions=action_history,
-                intensities=intensity_history,
-                losses=loss_history,
-                q_vals=q_vals_history,
-                title=alg_dict['title']
-            )
-            print(f"[{alg_title}] Total loss: {total_loss:.2f}")
-            print(f"[{alg_title}] Total Carbon: {total_carbon:.5f}")
-            print(f"[{alg_title}] Job completed in {len(action_history)} hours")
-            results[alg_title] = {
-                'loss': np.round(total_loss, 2),
-                'carbon': np.round(total_carbon, 5),
-                'hours': len(action_history)}
-
-        print("--- Results ---")
-        pprint.pprint(results)
-    
-        baseline = 'run-agent'
-        for key in results:
-            if key != baseline:
-                carbon_diff = generic.calculate_diff(results[baseline]['carbon'], results[key]['carbon'])
-                loss_diff = generic.calculate_diff(results[baseline]['loss'], results[key]['loss'])
-                # time_diff = generic.calculate_diff(results[baseline]['hours'], results[key]['hours'])
-                print(f'Loss difference from run-agent to {key} = {loss_diff}%')
-                print(f'Carbon difference from run-agent to {key} = {carbon_diff}%')
-                # print(f'Time difference from run-agent to {key} = {time_diff}')
-
-        plt.show()
-
-    def _save_model(self, model, model_name):
-        model_dir = f"models"
-        os.makedirs(model_dir, exist_ok=True)
-        model_path = os.path.join(model_dir, f"{model_name}.pkl")
-        
-        # Dump model
-        weights = model.get_weights()
-        joblib.dump(weights, model_path)
-
-    def _load_model(self, model, model_name):
-        model_path = f"models/{model_name}.pkl"
-        if os.path.exists(model_path):
-            weights = joblib.load(model_path)
-            model.load_weights(weights)
-            print(f"Loaded saved {model_name} model")
 
     def plot_losses(self):
         sns.set_theme(style="darkgrid")

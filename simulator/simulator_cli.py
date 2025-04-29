@@ -35,6 +35,7 @@ if __name__ == "__main__":
     parser.add_argument("-n", "--normalize", type=str_to_bool, default=normalize, help="Uses normalized data in [0,1] when true, otherwise uses original data")
     parser.add_argument("-lr", "--learning_rate", type=float, default=lr, help='Sets the learning rate.')
 
+    parser.add_argument("-eval", "--evaluate", type=str_to_bool, default=False, help="Evaluate saved models or not")
     parser.add_argument("-s", "--seed", type=int, help="Defines a seed. Useful for reproduction.")
     parser.add_argument("-v", "--verbose", type=str_to_bool, default=True, help="Sets whether training information should be displayed.")
 
@@ -54,8 +55,12 @@ if __name__ == "__main__":
                     args.normalize,
                     args.seed)
     
-    sim.train()
-    sim.evaluate()
+    # sim.train()
+    if args.evaluate:
+        sim.evaluate()
+    else:
+        sim.train()
+        sim.evaluate()
 
 
     
