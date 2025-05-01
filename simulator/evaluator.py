@@ -73,5 +73,45 @@ def evaluate(env, iterations, models):
             time_history[alg].append(metrics['hours'])
 
     utils.plot_evaluation_results(loss_history, carbon_history, iterations)
-    plt.show()
+    # plt.show()
+    calculate_scores(loss_history, carbon_history, time_history)
+
+def calculate_scores(losses, carbons, times):
+
+    calc_carbon_majority(carbons)
+    calc_data_stats(carbons, "carbon")
+    for key, all_carbons in carbons.items():
+        carbon_per_hour = np.divide(all_carbons, times[key])
+        print(f"[{key}] Mean carbon per hour: {np.mean(carbon_per_hour)}")
     
+    calc_data_stats(times, "time")
+    calc_data_stats(losses, "loss")
+
+def calc_data_stats(data, data_title):
+    print(f"--- Stats for {data_title} ---")
+    baseline_key = utils.get_baseline_key()
+
+    for key, datum in data.items():
+        mean = np.mean(datum)
+        std = np.std(datum)
+        print(f"[{key}] Mean {data_title}: {mean}")
+        print(f"[{key}] Std {data_title}: {std}")
+        if key != baseline_key:
+            baseline_datum = np.array(data[baseline_key])
+            new_datum = np.array(datum)
+
+            # Differences
+            diffs = utils.calc_diff(baseline_datum, new_datum)
+            mean_diff = np.mean(diffs)
+            print(f"[{key}] Mean {data_title} difference: {np.round(mean_diff * 100, 2)}% {data_title} change")
+
+def calc_carbon_majority(carbons):
+    baseline_key = utils.get_baseline_key()
+    baseline_carbons = carbons[baseline_key]
+
+    for key, datum in carbons.items():
+        if key != baseline_key:
+            x = np.subtract(baseline_carbons, np.array(datum))
+            print(len(x))
+            y = np.where(x < 0, x, x)
+            print(len(np.flatnonzero(y)))

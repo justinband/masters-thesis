@@ -30,9 +30,18 @@ def add_baseline_alg(env, models):
     models.setdefault(key, value)
     return models
 
+def get_baseline_key():
+    return 'run-agent'
+
+def calc_diff(old_val, new_val):
+    diff = (new_val - old_val) / old_val
+    return np.round(diff, 3)
+
 def plot_evaluation_results(loss_history, carbon_history, iterations):
     fig, axes = plt.subplots(2, 1)
     fig.suptitle(f"Model Evaluation over {iterations} iterations")
+
+    window = 50
 
     def get_trend_line(data, window=50):
         window_size = min(window, len(data)//10)
@@ -40,7 +49,14 @@ def plot_evaluation_results(loss_history, carbon_history, iterations):
         return smoothed
 
     for alg, losses in loss_history.items():
-        axes[0].plot(losses, label=alg, alpha=0.7)
+        trend = get_trend_line(losses, window)
+
+        axes[0].plot(range(window-1, len(losses)),
+                     trend,
+                     label=f'{alg}-trend',
+                     linewidth=2,
+                     zorder=2)
+        axes[0].plot(losses, label=alg, alpha=0.2, zorder=1)
         axes[0].set_title("Losses")
         axes[0].set_ylabel("Loss")
         axes[0].set_xlabel("Time")
@@ -48,15 +64,14 @@ def plot_evaluation_results(loss_history, carbon_history, iterations):
         axes[0].grid(True)
 
     for alg, carbons in carbon_history.items():
-        window = 100
         trend = get_trend_line(carbons, window)
 
         axes[1].plot(range(window-1, len(carbons)),
-                        trend,
-                        label=f'{alg}-trend',
-                        linewidth=2,
-                        zorder=2)
-        axes[1].plot(carbons, label=alg, alpha=0.5, zorder=1)
+                     trend,
+                     label=f'{alg}-trend',
+                     linewidth=2,
+                     zorder=2)
+        axes[1].plot(carbons, label=alg, alpha=0.2, zorder=1)
         axes[1].set_title("Carbons")
         axes[1].set_ylabel("Carbon")
         axes[1].set_xlabel("Time")
