@@ -21,7 +21,6 @@ class JobEnv():
         # Calculate Lambda
         self.alpha = alpha
         self.carbon_alpha = self.dataloader.get_quantile_from_data(alpha)
-        self.lamb = self._get_lambda(state=0)
         self.lambdas = []
 
         self.complete = False
@@ -82,7 +81,7 @@ class JobEnv():
             intensity = T_carbon[t]
             T_prev = t - 1
             N_prev = state_tracking[-1] if state_tracking else 0
-            lamb = self._get_lambda(state)
+            lamb = self._get_lambda(state=N_prev)
 
             if t in run_indices:
                 loss = self._calc_run_loss(lamb, T_prev, N_prev, intensity)
@@ -104,11 +103,12 @@ class JobEnv():
     def _calculate_loss(self, action, idx, track=False):
         data = self._get_dataset()
         intensity_t = data.iloc[idx]
-        lamb = self._get_lambda(self.job_state)
-        if track:
-            self.lambdas.append(lamb)
         T_prev = self.time - 1
         N_prev = self.job_state_tracking[-1] if self.job_state_tracking else 0
+        lamb = self._get_lambda(state=N_prev)
+
+        if track:
+            self.lambdas.append(lamb)
 
         if action == self.run:
             return self._calc_run_loss(lamb, T_prev, N_prev, intensity_t)
