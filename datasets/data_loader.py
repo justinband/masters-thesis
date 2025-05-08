@@ -8,11 +8,11 @@ import numpy as np
 import seaborn as sns
 from numpy import random
 from pathlib import Path
-
+from .carbon_quantiler import CarbonQuantiler
 
 class DataLoader():
 
-    def __init__(self, path=None, seed=None):
+    def __init__(self, train_size, alpha, path=None, seed=None):
         DATA_DIR = Path(__file__).parent
         if path:
             DATA_DIR = path
@@ -41,12 +41,29 @@ class DataLoader():
                 pickle.dump(self.data, f)
 
         self.unique = self.data['normalized'].nunique()
+        self.split_idx = 0
+        self.train_data, self.test_data = self._train_test_split(self.data, train_size)
 
+        self.alpha = alpha
+        carbon_quantiler = CarbonQuantiler(self.train_data, self.test_data, self.alpha)
+        self.train_ca, self.test_ca = carbon_quantiler.get_carbon_alphas()
+        self.train_ca_index, self.test_ca_index = carbon_quantiler.get_carbon_alpha_indexes()
+        self.plot_carbon_alphas()
+
+    def _train_test_split(self, data, train_size):
+        self.split_idx = int(len(data) * train_size)
+        train_df = data.iloc[:self.split_idx].reset_index(drop=True)
+        test_df = data.iloc[self.split_idx:].reset_index(drop=True)
+        return train_df, test_df
+    
     def _normalize_data(self):
         df = self.data
         col = 'carbon_intensity'
         self.data['normalized'] = np.interp(df[col], (df[col].min(), df[col].max()), (0, 1)) 
         self.data['normalized'] = np.round(self.data['normalized'], 5) # Analysis in data_analysis.ipynb determined 5 decimals is okay
+
+    def get_data_split(self):
+        return self.train_data, self.test_data
 
     def get_n_samples(self, hourly_window, num_samples):
         """
@@ -57,17 +74,6 @@ class DataLoader():
             s = self.sample_range(hourly_window)
             samples.append(s)
         return samples
-    
-    def split_data(self, train_size):
-        """
-        train_size must be a percentage 
-        """
-        data = self.data
-
-        split_idx = int(len(data) * train_size)
-        train_df = data.iloc[:split_idx]    # First % for training
-        val_df = data.iloc[split_idx:]      # Last (1 - %) for validation
-        return train_df, val_df
 
                 
     def sample_range(self, hourly_window):
@@ -115,9 +121,6 @@ class DataLoader():
             return opt_df, opt_total, subrange_df, subrange_total
         
         return opt_df, opt_total, None, None
-    
-    def _get_quantile(self, data, alpha):
-        return np.quantile(data, 1/alpha)
 
     def _plot_carbon_data(self, ax, df, selected_df, title):
         ax.plot(df['date'], df['carbon_intensity'], 'o-', label='Carbon Intensity')
@@ -143,11 +146,6 @@ class DataLoader():
             self._plot_carbon_data(ax, df, opt_df, f"[Optimal] Carbon Intensity: {opt_ci:.2f}")
         
         plt.show()
-
-    def get_quantile_from_data(self, alpha):
-        data = self.data.copy()
-        data = data.sort_values(by='normalized', ascending=False)['normalized'].values
-        return self._get_quantile(data, alpha)
 
     def find_and_plot_optimal_ci(self, df, job_size, find_subrange=False, show_plots=False):
         opt_df, opt_ci, sub_df, sub_ci = self._get_optimal_intensities(df, job_size, get_subrange=find_subrange)
@@ -212,7 +210,7 @@ class DataLoader():
         plt.plot(data)
 
         quantile = 1/alpha
-        quantile_value = self._get_quantile(data, alpha)
+        quantile_value = np.quantile(data, quantile)
 
         indexes = np.where(data <= quantile_value)[0]
         min_index = indexes[0]
@@ -228,3 +226,25 @@ class DataLoader():
         plt.legend()
         plt.show()
 
+
+    def plot_carbon_alphas(self):
+        sns.set_theme(style='darkgrid')
+        energy_type = 'normalized'
+        plt.plot(self.data[energy_type], alpha=0.5)
+        plt.axvline(self.split_idx, label='Split Index', color='red')
+
+        plt.axvline(self.train_ca_index, label=f'Train 1/{self.alpha} Index')
+        plt.axvline(self.test_ca_index, label=f'Test 1/{self.alpha} Index')
+        # plt.axhline(self.train_carbon_alpha, label='train ca', color='purple')
+        # plt.axhline(self.test_carbon_alpha, label='test ca', color='green')
+
+        train_sorted = self.train_data.sort_values(by='normalized', ascending=False)['normalized']
+        test_sorted = self.test_data.sort_values(by='normalized', ascending=False)['normalized']
+        plt.plot(np.arange(0, self.split_idx), train_sorted, label='Sorted train data')
+        plt.plot(np.arange(self.split_idx, len(self.data)), test_sorted, label='Sorted test data')
+
+        plt.xlabel("Normalized Carbon Intensity")
+        plt.ylabel("Index")
+        plt.title("")
+        plt.legend()
+        plt.show()

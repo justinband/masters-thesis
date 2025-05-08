@@ -26,7 +26,7 @@ class Simulator():
         self.wandb_log = False
 
         # Environment
-        dataloader = DataLoader(seed=seed)
+        dataloader = DataLoader(seed=seed, train_size=self.train_size, alpha=alpha)
         self.env = JobEnv(job_size, alpha, dataloader, self.normalize, self.train_size)
 
         # Algorithms
@@ -74,13 +74,13 @@ class Simulator():
         print("Start training...")
         for alg_i, (alg_title, alg_dict) in enumerate(self.algs.items()):
             agent = alg_dict['alg']
-            if self.wandb_log:
-                config = {
+            config = {
                     "learning_rate": agent.lr,
                     "episodes": self.episodes,
                     "job_size": self.job_size,
                     "alpha": self.alpha
-                }
+                } 
+            if self.wandb_log:
                 wandb.init(
                     project="carbon-scheduling",
                     name=f'{alg_title}_job{self.job_size}_alpha{self.alpha}',
@@ -111,7 +111,7 @@ class Simulator():
             if self.verbose:
                 print(f"[{alg_dict['title']}] End")
 
-            utils.save_model(agent, alg_title)
+            utils.save_model(agent, alg_title, config)
         print("End training...")
 
     def evaluate(self, iterations=1000):

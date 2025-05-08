@@ -12,7 +12,6 @@ class JobEnv():
         self.time = 0   # time tracker
         self.curr_idx = start_idx    # current energy index
         self.dataloader = dataloader
-        df = self.dataloader.data
 
         # Actions
         self.pause = 0
@@ -20,7 +19,7 @@ class JobEnv():
 
         # Calculate Lambda
         self.alpha = alpha
-        self.carbon_alpha = self.dataloader.get_quantile_from_data(alpha)
+        # self.carbon_alpha = dataloader.get_quantile_from_data(alpha)
         self.lambdas = []
 
         self.complete = False
@@ -28,7 +27,9 @@ class JobEnv():
         self.is_train = True
 
         # Energy data
-        self.train_data, self.test_data = self._train_test_split(df, train_size)
+        self.train_data, self.test_data = dataloader.get_data_split()
+        self.train_carbon_alpha = dataloader.train_ca
+        self.test_carbon_alpha = dataloader.test_ca
 
     def _train_test_split(self, data, train_size):
         split_idx = int(len(data) * train_size)
@@ -44,14 +45,19 @@ class JobEnv():
         assert self.is_normal is not None, "JobEnv not correctly initialized"
         return 'normalized' if self.is_normal else 'carbon_intensity'
     
+    def _get_carbon_alpha(self):
+        return self.train_carbon_alpha if self.is_train else self.test_carbon_alpha
+    
     def _get_lambda(self, state):
-        return 1/self.alpha * self.carbon_alpha * (state + 1)
+        carbon_alpha = self._get_carbon_alpha()
+        return 1/self.alpha * carbon_alpha * (state + 1)
         # return 1/self.alpha * self.carbon_alpha * self.job_size
     
     def _get_T_alpha(self, sum_data):
+        carbon_alpha = self._get_carbon_alpha()
         # T <= [alpha * (1/carbon_alpha) * sum^N_{i=1} c_i] + N
         N = self.job_size
-        T = (self.alpha * (1/self.carbon_alpha) * sum_data) + N
+        T = (self.alpha * (1/carbon_alpha) * sum_data) + N
         return T
 
     def calc_opt_carbon(self, start_idx):
