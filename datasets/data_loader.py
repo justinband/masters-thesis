@@ -243,8 +243,8 @@ class DataLoader():
         plt.plot(np.arange(0, self.split_idx), train_sorted, label='Sorted train data')
         plt.plot(np.arange(self.split_idx, len(self.data)), test_sorted, label='Sorted test data')
 
-        plt.xlabel("Normalized Carbon Intensity")
-        plt.ylabel("Index")
+        plt.ylabel("Normalized Carbon Intensity")
+        plt.xlabel("Index")
         plt.title("")
         plt.legend()
         plt.show()
