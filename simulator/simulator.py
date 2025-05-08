@@ -114,9 +114,15 @@ class Simulator():
             utils.save_model(agent, alg_title, config)
         print("End training...")
 
-    def evaluate(self, iterations=1000):
+    def evaluate(self, iterations=6000):
         self.env.test()
-        evaluator.evaluate(self.env, iterations, self.algs) 
+        config = {
+            'job_size': self.job_size,
+            'alpha': self.alpha,
+            'learning_rate': self.lr,
+            'episodes': self.episodes
+        }
+        evaluator.evaluate(self.env, iterations, self.algs, config) 
 
 
     def plot_losses(self):

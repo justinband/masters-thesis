@@ -16,25 +16,26 @@ def save_model(model, model_name, info):
     model_dir = f"models"
     os.makedirs(model_dir, exist_ok=True)
 
-    # name = get_model_filename(model_name, info)
-    name = model_name
+    name = get_model_filename(model_name, info)
     model_path = os.path.join(model_dir, f"{name}.pkl")
-    # model_path = os.path.join(model_dir, f"{model_name}.pkl")
     
     # Dump model
     weights = model.get_weights()
     joblib.dump(weights, model_path)
 
-def load_model(model, model_name, info=None):
-    if info == None:
+def load_model(model, model_name, config=None):
+    if config == None:
         name = model_name
     else:
-        name = get_model_filename(model_name, info)
-    model_path = f"models/{name}.pkl"
+        name = get_model_filename(model_name, config)
+
+    model_dir = f"models"
+    model_path = os.path.join(model_dir, f"{name}.pkl")
+
     if os.path.exists(model_path):
         weights = joblib.load(model_path)
         model.load_weights(weights)
-        print(f"Loaded saved {model_name} model")
+        print(f"Loaded saved {model_name} model ({name})")
         return model
     else:
         raise Exception(f"Saved {model_name} model not found")

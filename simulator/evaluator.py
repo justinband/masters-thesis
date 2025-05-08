@@ -46,9 +46,9 @@ def run_eval(env, models):
     return results
 
 
-def evaluate(env, iterations, models):
-    for i, (alg_name, dict) in enumerate(models.items()):
-        loaded_model = utils.load_model(dict['alg'], alg_name)
+def evaluate(env, iterations, models, config):
+    for i, (alg_name, dict) in enumerate(models.items()):        
+        loaded_model = utils.load_model(dict['alg'], alg_name, config)
         models[alg_name]['alg'] = loaded_model
 
     utils.add_baseline_alg(env, models)
@@ -73,17 +73,12 @@ def evaluate(env, iterations, models):
             time_history[alg].append(metrics['hours'])
 
     utils.plot_evaluation_results(loss_history, carbon_history, iterations)
-    # plt.show()
+    plt.show()
     calculate_scores(loss_history, carbon_history, time_history)
 
 def calculate_scores(losses, carbons, times):
-
     calc_carbon_majority(carbons)
     calc_data_stats(carbons, "carbon")
-    for key, all_carbons in carbons.items():
-        carbon_per_hour = np.divide(all_carbons, times[key])
-        print(f"[{key}] Mean carbon per hour: {np.mean(carbon_per_hour)}")
-    
     calc_data_stats(times, "time")
     calc_data_stats(losses, "loss")
 
