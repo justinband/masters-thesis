@@ -1,13 +1,15 @@
+import numpy as np
 from abc import ABC, abstractmethod
+from mdps import JobEnv
 
 class LearningAlg():
-    def __init__(self, env, lr, epsilon, epsilon_min, epsilon_decay):
+    def __init__(self, env: JobEnv, lr, epsilon, epsilon_min, epsilon_decay):
         self.env = env
         self.lr = lr      # Exploration-rate
         self.epsilon = epsilon  # Learning rate
+        self.epsilon_max = epsilon
         self.epsilon_min = epsilon_min
-        self.epsilon_decay = epsilon_decay
-
+        self.decay_factor = epsilon_decay # 0.001
     @abstractmethod
     def train_episode(self, data):
         """
@@ -22,15 +24,12 @@ class LearningAlg():
         """
         pass
 
-    def decay_epsilon(self):
+    def decay_epsilon(self, episode):
         """
         Decays epsilon according to a standardized approach
         """
-        # FIXME: Play around with the decaying
         if self.epsilon > self.epsilon_min:
-            # self.epsilon = max(self.epsilon_min, self.epsilon - ((1-self.epsilon_min)/4000)) # Constant rate
-            # self.epsilon = self.epsilon_min + (1.0 - self.epsilon_min) * np.exp(-0.0001 * episode) # "Inverse step decay", faster to start and slows down.
-            self.epsilon *= self.epsilon_decay
-
+            # Inverse Time Decay
+            self.epsilon = self.epsilon_min + (self.epsilon_max - self.epsilon_min) / (1 + self.decay_factor * episode)
 
     

@@ -48,7 +48,7 @@ class QLearn(LearningAlg):
 
         optimal_loss, optimal_carbon, optimal_time = self.env.calc_opt_carbon(start_idx)
         regret = generic.calculate_regret(total_loss, optimal_loss)
-        self.decay_epsilon()
+        self.decay_epsilon(episode)
         
         if episode % 100 == 0:
             print(f"Episode: {episode}, Total Loss: {total_loss:.2f}, Epsilon: {self.epsilon:.2f}")

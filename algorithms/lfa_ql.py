@@ -20,7 +20,7 @@ class LinearFunctionApproximator:
         self.weights += lr * error * features
 
 class LinearQLearning(LearningAlg):
-    def __init__(self, env: JobEnv, lr=0.01, epsilon = 1, epsilon_min = 0.01, epsilon_decay=0.99):
+    def __init__(self, env: JobEnv, lr, epsilon, epsilon_min, epsilon_decay):
         super().__init__(env, lr, epsilon, epsilon_min, epsilon_decay)
         self.max_time = 500
         self.state_dim = 3
@@ -144,7 +144,7 @@ class LinearQLearning(LearningAlg):
         # Regret
         optimal_loss, optimal_carbon, optimal_time = self.env.calc_opt_carbon(start_idx=start_idx)
         regret = generic.calculate_regret(total_loss, optimal_loss)
-        self.decay_epsilon()
+        self.decay_epsilon(episode)
 
         if episode % 100 == 0:
             print(f"Episode: {episode}, Total Loss: {total_loss:.2f}, Optimal Loss: {optimal_loss:.2f}, TimeDiff: {optimal_time - self.env.time}, Epsilon: {self.epsilon:.2f}")
