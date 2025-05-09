@@ -21,6 +21,10 @@ class Simulator():
         self.verbose = verbose
         self.normalize = normalized
         self.train_size = 0.8
+
+        self.epsilon = 1
+        self.epsilon_min = 0.05
+        self.epsilon_decay = 0.001 # 0.1 would be faster
         
         # Flags
         self.wandb_log = False
@@ -32,7 +36,7 @@ class Simulator():
         # Algorithms
         self.algs = {}
         for a in algs:
-            self.algs[a] = self._create_alg(a, self.env, self.lr)
+            self.algs[a] = self._create_alg(a)
 
         # Trackers
         num_algs = len(self.algs)
@@ -49,14 +53,18 @@ class Simulator():
         self.temp_cum_regret = np.zeros((len(self.algs), self.episodes))
         self.instant_regret = np.zeros((len(self.algs), self.episodes))
 
-    def _create_alg(self, alg_name, env, lr):
+    def _create_alg(self, alg_name):
         alg_map = {
             "ql": ("Q-Learning", QLearn),
             "lfa-ql": ("Linear Q-Learning", LinearQLearning),
             "run-only": ("Run-Only Agent", RunAgent)
         }
         title, algorithm_class = alg_map.get(alg_name)
-        algorithm = algorithm_class(env, lr=lr)
+        algorithm = algorithm_class(env=self.env,
+                                    lr=self.lr,
+                                    epsilon=self.epsilon,
+                                    epsilon_min=self.epsilon_min,
+                                    epsilon_decay=self.epsilon_decay)
         return {'title': title, 'alg': algorithm}
     
     def _pad_data(self, data, max_length):
@@ -114,7 +122,7 @@ class Simulator():
             utils.save_model(agent, alg_title, config)
         print("End training...")
 
-    def evaluate(self, iterations=6000):
+    def evaluate(self, iterations=10000):
         self.env.test()
         config = {
             'job_size': self.job_size,
