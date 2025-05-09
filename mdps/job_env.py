@@ -30,6 +30,7 @@ class JobEnv():
         self.train_data, self.test_data = dataloader.get_data_split()
         self.train_carbon_alpha = dataloader.train_ca
         self.test_carbon_alpha = dataloader.test_ca
+        self.curr_carbon_alpha = None
 
     def _train_test_split(self, data, train_size):
         split_idx = int(len(data) * train_size)
@@ -46,7 +47,10 @@ class JobEnv():
         return 'normalized' if self.is_normal else 'carbon_intensity'
     
     def _get_carbon_alpha(self):
-        return self.train_carbon_alpha if self.is_train else self.test_carbon_alpha
+        if self.curr_carbon_alpha:
+            return self.curr_carbon_alpha
+        else:
+            raise Exception("Carbon 1/Alpha has not been calculated")
     
     def _get_lambda(self, state):
         carbon_alpha = self._get_carbon_alpha()
@@ -139,8 +143,11 @@ class JobEnv():
         return intensity + penalty
     
     def get_random_index(self):
+        buffer = 12
         data = self.train_data if self.is_train else self.test_data
-        return np.random.randint(len(data)) 
+        index = np.random.randint(buffer, len(data) - 1)
+        assert index >= buffer , AssertionError(f"Chosen Index {index} is less than the {buffer} hour carbon alpha buffer")
+        return index
     
     def get_carbon(self):
         data = self._get_dataset()
@@ -173,6 +180,7 @@ class JobEnv():
         self.job_state = 0
         self.job_state_tracking = []
         self.time = 0
-        self.curr_idx = start_idx
         self.complete = False
+        self.curr_carbon_alpha = self.dataloader.get_ca_from_idx(idx=start_idx, is_train=self.is_train)
+        self.curr_idx = start_idx
         return self.job_state

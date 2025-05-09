@@ -45,10 +45,17 @@ class DataLoader():
         self.train_data, self.test_data = self._train_test_split(self.data, train_size)
 
         self.alpha = alpha
-        carbon_quantiler = CarbonQuantiler(self.train_data, self.test_data, self.alpha)
-        self.train_ca, self.test_ca = carbon_quantiler.get_carbon_alphas()
-        self.train_ca_index, self.test_ca_index = carbon_quantiler.get_carbon_alpha_indexes()
-        self.plot_carbon_alphas()
+        self.carbon_quantiler = CarbonQuantiler(self.train_data, self.test_data, self.alpha)
+        self.train_ca, self.train_ca_index = self.carbon_quantiler.get_quantile_from_data(self.train_data)
+        self.test_ca, self.test_ca_index = self.carbon_quantiler.get_quantile_from_data(self.test_data)
+        self.test_ca_index += len(self.train_data)
+        # self.plot_carbon_alphas()
+
+    def get_ca_from_idx(self, idx, is_train):
+        # Split data for before index
+        data = self.train_data[:idx] if is_train else self.test_data[:idx]
+        value, index = self.carbon_quantiler.get_quantile_from_data(data)
+        return value
 
     def _train_test_split(self, data, train_size):
         self.split_idx = int(len(data) * train_size)
@@ -226,17 +233,18 @@ class DataLoader():
         plt.legend()
         plt.show()
 
-
     def plot_carbon_alphas(self):
-        sns.set_theme(style='darkgrid')
         energy_type = 'normalized'
+
+        sns.set_theme(style='darkgrid')
+        plt.figure(figsize=(10, 6))
         plt.plot(self.data[energy_type], alpha=0.5)
         plt.axvline(self.split_idx, label='Split Index', color='red')
 
-        plt.axvline(self.train_ca_index, label=f'Train 1/{self.alpha} Index')
-        plt.axvline(self.test_ca_index, label=f'Test 1/{self.alpha} Index')
-        # plt.axhline(self.train_carbon_alpha, label='train ca', color='purple')
-        # plt.axhline(self.test_carbon_alpha, label='test ca', color='green')
+        # plt.axhline(y=self.train_ca, xmin=0, xmax=self.split_idx/len(self.data),color='purple')
+        plt.axvline(self.train_ca_index, label=f'Train 1/{self.alpha} Index', linestyle='-.', color='purple')
+        # plt.axhline(y=self.test_ca, color='darkblue')
+        plt.axvline(self.test_ca_index, label=f'Test 1/{self.alpha} Index', linestyle='-.', color='darkblue')
 
         train_sorted = self.train_data.sort_values(by='normalized', ascending=False)['normalized']
         test_sorted = self.test_data.sort_values(by='normalized', ascending=False)['normalized']
@@ -244,7 +252,9 @@ class DataLoader():
         plt.plot(np.arange(self.split_idx, len(self.data)), test_sorted, label='Sorted test data')
 
         plt.ylabel("Normalized Carbon Intensity")
-        plt.xlabel("Index")
+        plt.xlabel("Index of Data")
         plt.title("")
         plt.legend()
+        sns.despine()
+        plt.tight_layout()
         plt.show()
