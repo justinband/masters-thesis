@@ -1,12 +1,9 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from . import utils
+from . import utils, logger
 
 def run_eval(env, models):
     results = {}
-    ##### FIXME: THIS SHOULD BE REMOVED
-    # start_idx = 6500
-    #####
     start_idx = env.get_random_index()
 
     for alg_i, (alg_name, alg_dict) in enumerate(models.items()):
@@ -29,9 +26,6 @@ def run_eval(env, models):
             'hours': len(action_history)
         }
 
-    # print("--- Results ---")
-    # pprint.pprint(results)
-
     # baseline = 'run-agent'
     # for key in results:
     #     if key != baseline:
@@ -51,6 +45,10 @@ def evaluate(env, iterations, models, config):
         loaded_model = utils.load_model(dict['alg'], alg_name, config)
         models[alg_name]['alg'] = loaded_model
 
+        logger.init_logging(project='test-green-scheduling',
+                            config=config,
+                            alg_title=alg_name
+                            )
     utils.add_baseline_alg(env, models)
         
     results = []
@@ -77,7 +75,7 @@ def evaluate(env, iterations, models, config):
     calculate_scores(loss_history, carbon_history, time_history)
 
 def calculate_scores(losses, carbons, times):
-    calc_carbon_majority(carbons)
+    # calc_carbon_majority(carbons)
     calc_data_stats(carbons, "carbon")
     calc_data_stats(times, "time")
     calc_data_stats(losses, "loss")
@@ -85,6 +83,9 @@ def calculate_scores(losses, carbons, times):
 def calc_data_stats(data, data_title):
     print(f"--- Stats for {data_title} ---")
     baseline_key = utils.get_baseline_key()
+
+    if data_title == 'carbon':
+        calc_carbon_majority(data)
 
     for key, datum in data.items():
         mean = np.mean(datum)
@@ -98,7 +99,10 @@ def calc_data_stats(data, data_title):
             # Differences
             diffs = utils.calc_diff(baseline_datum, new_datum)
             mean_diff = np.mean(diffs)
-            print(f"[{key}] Mean {data_title} difference: {np.round(mean_diff * 100, 2)}% {data_title} change")
+            mean_diff = np.round(mean_diff * 100, 2)
+            print(f"[{key}] Mean {data_title} difference: {mean_diff}% {data_title} change")
+
+            logger.eval_log(data_title, mean, std, mean_diff)
 
 def calc_carbon_majority(carbons):
     baseline_key = utils.get_baseline_key()
@@ -106,7 +110,6 @@ def calc_carbon_majority(carbons):
 
     for key, datum in carbons.items():
         if key != baseline_key:
-            x = np.subtract(baseline_carbons, np.array(datum))
-            print(len(x))
-            y = np.where(x < 0, x, x)
-            print(len(np.flatnonzero(y)))
+            better_mask = np.array(datum) < baseline_carbons
+            num_better = np.count_nonzero(better_mask)
+            print(f'[{key}] #{num_better} better (lower) carbons out of {len(baseline_carbons)}')

@@ -7,7 +7,7 @@ import numpy as np
 import seaborn as sns
 import pandas as pd
 import wandb
-from . import evaluator
+from . import evaluator, logger
 from . import utils
 
 class Simulator():
@@ -37,6 +37,9 @@ class Simulator():
         self.algs = {}
         for a in algs:
             self.algs[a] = self._create_alg(a)
+
+        # Logging
+        self.project_name = 'green-scheduling'
 
         # Trackers
         num_algs = len(self.algs)
@@ -80,20 +83,15 @@ class Simulator():
 
     def train(self):
         print("Start training...")
+
         for alg_i, (alg_title, alg_dict) in enumerate(self.algs.items()):
             agent = alg_dict['alg']
-            config = {
-                    "learning_rate": agent.lr,
-                    "episodes": self.episodes,
-                    "job_size": self.job_size,
-                    "alpha": self.alpha
-                } 
+            config = utils.build_config(self.job_size, self.alpha, agent.lr, self.episodes)
             if self.wandb_log:
-                wandb.init(
-                    project="carbon-scheduling",
-                    name=f'{alg_title}_job{self.job_size}_alpha{self.alpha}',
-                    config=config
-                )
+                logger.init_logging(project='train' + self.project_name,
+                                    config=config,
+                                    alg_title=alg_title
+                                    )
 
             print(f"[{alg_dict['title']}] {self.episodes} episodes. LR = {self.lr}")
 
@@ -108,13 +106,7 @@ class Simulator():
                 self.regrets[alg_i][e] = regret
 
                 if self.wandb_log:
-                    wandb.log({
-                        "episode": e,
-                        "train_loss": loss,
-                        "carbon": carbon,
-                        "optimal_carbon": opt_carbon,
-                        "regret": regret
-                    })
+                    logger.train_log(e, loss, carbon, opt_carbon, regret)
         
             if self.verbose:
                 print(f"[{alg_dict['title']}] End")
@@ -124,12 +116,7 @@ class Simulator():
 
     def evaluate(self, iterations=10000):
         self.env.test()
-        config = {
-            'job_size': self.job_size,
-            'alpha': self.alpha,
-            'learning_rate': self.lr,
-            'episodes': self.episodes
-        }
+        config = utils.build_config(self.job_size, self.alpha, self.lr, self.episodes)
         evaluator.evaluate(self.env, iterations, self.algs, config) 
 
 

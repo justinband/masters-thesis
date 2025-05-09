@@ -40,6 +40,15 @@ def load_model(model, model_name, config=None):
     else:
         raise Exception(f"Saved {model_name} model not found")
 
+def build_config(job_size, alpha, lr, episodes):
+    config = {
+            'job_size': job_size,
+            'alpha': alpha,
+            'learning_rate': lr,
+            'episodes': episodes
+        }
+    return config
+
 def add_baseline_alg(env, models):
     agent = RunAgent(env)
     key = 'run-agent'
