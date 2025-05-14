@@ -42,6 +42,7 @@ class DataLoader():
 
         self.unique = self.data['normalized'].nunique()
         self.split_idx = 0
+        self.train_size = train_size
         self.train_data, self.test_data = self._train_test_split(self.data, train_size)
 
         self.alpha = alpha
@@ -49,7 +50,7 @@ class DataLoader():
         self.train_ca, self.train_ca_index = self.carbon_quantiler.get_quantile_from_data(self.train_data)
         self.test_ca, self.test_ca_index = self.carbon_quantiler.get_quantile_from_data(self.test_data)
         self.test_ca_index += len(self.train_data)
-        # self.plot_carbon_alphas()
+        self.plot_carbon_alphas()
 
     def get_ca_from_idx(self, idx, is_train):
         # Split data for before index
@@ -159,57 +160,6 @@ class DataLoader():
         if show_plots:
             self._visualize_optimal_carbon_data(df, opt_df, opt_ci, sub_df, sub_ci)
         return opt_df, opt_ci, sub_df, sub_ci
-    
-    def plot_hist(self):
-        sns.set_theme(style="darkgrid")
-        
-        col = 'carbon_intensity'
-        sns.histplot(
-            self.data[col],
-            bins = 100,
-            stat = 'density',
-            # color = 'royalblue',
-            # edgecolor = 'black',
-            alpha = 0.8
-        )
-        sns.kdeplot(self.data[col]) # Plot density line
-        
-        mean = self.data[col].mean()
-        std = self.data[col].std()
-        plt.axvline(mean, color='darkred', linestyle='solid', linewidth=1.5, label="Mean")
-        plt.axvline(mean + std, color='darkgreen', linestyle='solid', linewidth=1.2, label="± SD")
-        plt.axvline(mean - std, color='darkgreen', linestyle='solid', linewidth=1.2)
-
-        plt.xlabel(r"Carbon Intensity gCO$_2$eq/kWh (direct)", fontsize=12)
-        plt.ylabel("Density", fontsize=12)
-
-        min_date = pd.Timestamp(self.data['date'].min()).strftime('%d/%m/%Y')
-        max_date = pd.Timestamp(self.data['date'].max()).strftime('%d/%m/%Y')
-        plt.title(f"Distribution of Carbon Intensities from {min_date} to {max_date}")
-        
-        plt.tight_layout()
-        plt.legend()
-        plt.show()
-
-    def plot(self):
-        plt.figure(figsize=(7.5,7.5))
-        plt.plot(self.data['date'], self.data['carbon_intensity']) # date on x-axis and carbon_intensity on y-axis
-        ax = plt.gca()
-
-        # Labels
-        ax.xaxis.set_major_locator(mdates.AutoDateLocator())  # Show major ticks yearly
-        ax.xaxis.set_major_formatter(mdates.DateFormatter('%Y-%m'))  # Format as "YYYY-MM"
-        ax.xaxis.set_minor_locator(mdates.MonthLocator(bymonth=(1, 7)))  # Minor ticks every 6 months
-        plt.xticks(rotation=45)  # Rotate labels for better readability
-        plt.xlabel("Date")
-        plt.ylabel("gCO₂eq/kWh")
-
-        # Title
-        min_date = pd.Timestamp(self.data['date'].min()).strftime('%d/%m/%Y')
-        max_date = pd.Timestamp(self.data['date'].max()).strftime('%d/%m/%Y')
-        plt.title(f"Danish Carbon Intensities from {min_date} to {max_date}")
-
-        plt.show()
 
     def plot_quantile_ranges(self, alpha):
         data = self.data.copy()
@@ -237,24 +187,66 @@ class DataLoader():
         energy_type = 'normalized'
 
         sns.set_theme(style='darkgrid')
+
         plt.figure(figsize=(10, 6))
-        plt.plot(self.data[energy_type], alpha=0.5)
-        plt.axvline(self.split_idx, label='Split Index', color='red')
+        data = self.data.copy()
+        data['date'] = pd.to_datetime(data['date'])
+        data = data.set_index('date').sort_index()
+        sns.lineplot(x=data[energy_type].index, y=data[energy_type].values, linewidth=1.2, alpha=0.5)
 
-        # plt.axhline(y=self.train_ca, xmin=0, xmax=self.split_idx/len(self.data),color='purple')
-        plt.axvline(self.train_ca_index, label=f'Train 1/{self.alpha} Index', linestyle='-.', color='purple')
-        # plt.axhline(y=self.test_ca, color='darkblue')
-        plt.axvline(self.test_ca_index, label=f'Test 1/{self.alpha} Index', linestyle='-.', color='darkblue')
-
+        # Descending Train and Test data
         train_sorted = self.train_data.sort_values(by='normalized', ascending=False)['normalized']
         test_sorted = self.test_data.sort_values(by='normalized', ascending=False)['normalized']
-        plt.plot(np.arange(0, self.split_idx), train_sorted, label='Sorted train data')
-        plt.plot(np.arange(self.split_idx, len(self.data)), test_sorted, label='Sorted test data')
+        plt.plot(pd.date_range(data.index[0],data.index[self.split_idx-1], freq='h'),
+                 train_sorted,
+                 label='Descending train data',
+                 linewidth=2)
+        plt.plot(pd.date_range(data.index[self.split_idx],data.index[-1], freq='h'),
+                 test_sorted,
+                 label='Descending test data',
+                 linewidth=2)
 
-        plt.ylabel("Normalized Carbon Intensity")
-        plt.xlabel("Index of Data")
-        plt.title("")
+        plt.axvline(data.index[self.split_idx], label='Train/Test Split', color='red')
+
+        # plt.axhline(y=self.train_ca, xmin=0, xmax=self.split_idx/len(self.data),color='purple')
+        # plt.axvline(data.index[self.train_ca_index], label=r'Train $c_{1/\beta}$', linestyle='-.', color='purple')
+        plt.scatter(x=data.index[self.train_ca_index],
+                    y=self.train_ca,
+                    label=fr"Train $c_{{1/\beta}} = {np.round(self.train_ca, 3)}$",
+                    s=100,
+                    zorder=5,
+                    color='darkorange')
+        sns.lineplot(
+            x=pd.date_range(data.index[0], data.index[self.train_ca_index], freq='h'),
+            y=self.train_ca,
+            color='grey',
+            linestyle='--',
+            alpha=0.5
+        )
+
+        # plt.axhline(y=self.test_ca, color='darkblue')
+        # plt.axvline(data.index[self.test_ca_index], label=r'Test $c_{1/\beta}$', linestyle='-.', color='darkblue')
+        plt.scatter(x=data.index[self.test_ca_index],
+                    y=self.test_ca,
+                    label=fr'Test $c_{{1/\beta}} = {np.round(self.test_ca, 3)}$',
+                    s=100,
+                    zorder=5,
+                    color='darkgreen')
+        sns.lineplot(
+            x=pd.date_range(data.index[0], data.index[self.test_ca_index], freq='h'),
+            y=self.test_ca,
+            color='grey',
+            linestyle='--',
+            alpha=0.5
+        )
+
+        
+
+        plt.ylabel("Normalized Carbon Intensity", labelpad=10)
+        plt.xlabel("Date", labelpad=10)
+        plt.title(fr"Carbon quantiles for {int(self.train_size * 100)}% Train/Test Split with $\beta = {self.alpha}$")
         plt.legend()
         sns.despine()
         plt.tight_layout()
+        plt.savefig('./figures/dataset/all_caron_alpha.png', dpi=300)
         plt.show()
