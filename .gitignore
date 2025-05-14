@@ -1,9 +1,9 @@
 # MacOS
 .DS_Store
 
-# WandB
 wandb/
 models/
+figures/dataset/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
