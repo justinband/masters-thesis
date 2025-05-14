@@ -183,4 +183,4 @@ class JobEnv():
         self.complete = False
         self.curr_carbon_alpha = self.dataloader.get_ca_from_idx(idx=start_idx, is_train=self.is_train)
         self.curr_idx = start_idx
-        return self.job_state
+        return self.curr_carbon_alpha

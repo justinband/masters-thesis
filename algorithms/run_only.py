@@ -9,7 +9,7 @@ class RunAgent():
         self.env.test()
         if start_idx is None:
             start_idx = self.env.get_random_index()
-        self.env.reset(start_idx)
+        carbon_alpha = self.env.reset(start_idx)
 
         done = False
         total_loss = 0
@@ -32,4 +32,4 @@ class RunAgent():
             total_loss += loss
             total_carbon += curr_intenisty
             
-        return total_loss, action_history, intensity_history, state_history, loss_history, [], total_carbon
+        return total_loss, action_history, intensity_history, state_history, loss_history, [], total_carbon, carbon_alpha

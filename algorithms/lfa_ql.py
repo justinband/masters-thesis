@@ -146,7 +146,7 @@ class LinearQLearning(LearningAlg):
         regret = generic.calculate_regret(total_loss, optimal_loss)
         self.decay_epsilon(episode)
 
-        if episode % 100 == 0:
+        if episode % 1000 == 0:
             print(f"Episode: {episode}, Total Loss: {total_loss:.2f}, Optimal Loss: {optimal_loss:.2f}, TimeDiff: {optimal_time - self.env.time}, Epsilon: {self.epsilon:.2f}")
 
         return total_loss, total_carbon, optimal_carbon, regret
@@ -159,7 +159,7 @@ class LinearQLearning(LearningAlg):
         assert self.env.is_train == False
         if start_idx is None:
             start_idx = self.env.get_random_index()
-        self.env.reset(start_idx)
+        carbon_alpha = self.env.reset(start_idx)
         done = False
         total_loss = 0
         total_carbon = 0
@@ -193,7 +193,7 @@ class LinearQLearning(LearningAlg):
             if action == self.env.run:
                 total_carbon += curr_intensity
 
-        return total_loss, action_history, intensity_history, state_history, loss_history, q_vals_history, total_carbon
+        return total_loss, action_history, intensity_history, state_history, loss_history, q_vals_history, total_carbon, carbon_alpha
 
     def get_weights(self):
         return self.approximators
@@ -263,7 +263,7 @@ def main():
 
 
     ## Evaluate
-    total_loss, action_history, intensity_history, state_history, loss_history, q_vals_history, total_carbon = agent.evaluate()
+    total_loss, action_history, intensity_history, state_history, loss_history, q_vals_history, total_carbon, carbon_alpha = agent.evaluate()
     import matplotlib.pyplot as plt
     plt.plot(env.lambdas)
     plt.title("Eval Lambdas")

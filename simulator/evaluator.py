@@ -1,4 +1,9 @@
+import io
+import os
+import matplotlib
 import numpy as np
+if os.environ.get("WANDB_SWEEP") == "true":
+    matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from . import utils, logger
 
@@ -8,7 +13,7 @@ def run_eval(env, models):
 
     for alg_i, (alg_name, alg_dict) in enumerate(models.items()):
         agent = alg_dict['alg']
-        total_loss, action_history, intensity_history, state_history, loss_history, q_vals_history, total_carbon = agent.evaluate(start_idx)
+        total_loss, action_history, intensity_history, state_history, loss_history, q_vals_history, total_carbon, carbon_alpha = agent.evaluate(start_idx)
 
         # plotting.plot_evaluation_results(
         #     actions=action_history,
@@ -23,7 +28,8 @@ def run_eval(env, models):
         results[alg_name] = {
             'loss': np.round(total_loss, 2),
             'carbon': np.round(total_carbon, 5),
-            'hours': len(action_history)
+            'hours': len(action_history),
+            'carbon_1/alpha': carbon_alpha
         }
 
     # baseline = 'run-agent'
@@ -41,6 +47,7 @@ def run_eval(env, models):
 
 
 def evaluate(env, iterations, models, config):
+    print(f"Evaluating for {iterations} iterations")
     for i, (alg_name, dict) in enumerate(models.items()):        
         loaded_model = utils.load_model(dict['alg'], alg_name, config)
         models[alg_name]['alg'] = loaded_model
@@ -53,7 +60,7 @@ def evaluate(env, iterations, models, config):
         
     results = []
     for i in range(iterations):
-        if i % 100 == 0:
+        if i % 1000 == 0:
             print(f"Iterations: {i}")
         eval = run_eval(env, models)
         results.append(eval)
@@ -63,22 +70,21 @@ def evaluate(env, iterations, models, config):
     loss_history = {alg: [] for alg in alg_keys}
     carbon_history = {alg: [] for alg in alg_keys}
     time_history = {alg: [] for alg in alg_keys}
+    carbon_alpha_history = {alg: [] for alg in alg_keys}
 
     for timestep in results:
         for alg, metrics in timestep.items():
             loss_history[alg].append(metrics['loss'])
             carbon_history[alg].append(metrics['carbon'])
             time_history[alg].append(metrics['hours'])
+            carbon_alpha_history[alg].append(metrics['carbon_1/alpha'])
 
-    utils.plot_evaluation_results(loss_history, carbon_history, iterations)
-    plt.show()
-    calculate_scores(loss_history, carbon_history, time_history)
-
-def calculate_scores(losses, carbons, times):
-    # calc_carbon_majority(carbons)
-    calc_data_stats(carbons, "carbon")
-    calc_data_stats(times, "time")
-    calc_data_stats(losses, "loss")
+    calc_data_stats(loss_history, "loss")
+    calc_data_stats(carbon_history, "carbon")
+    calc_data_stats(time_history, "time")
+    for key, data in carbon_alpha_history.items():
+        if key != utils.get_baseline_key():
+            logger.log("carbon_1/alpha mean", np.mean(data))
 
 def calc_data_stats(data, data_title):
     print(f"--- Stats for {data_title} ---")
@@ -102,7 +108,14 @@ def calc_data_stats(data, data_title):
             mean_diff = np.round(mean_diff * 100, 2)
             print(f"[{key}] Mean {data_title} difference: {mean_diff}% {data_title} change")
 
-            logger.eval_log(data_title, mean, std, mean_diff)
+            stat_dict = {
+                "mean": mean,
+                "std": std,
+                "base_mean": np.mean(baseline_datum),
+                "base_std": np.std(baseline_datum),
+                "base_diff_percent": mean_diff
+            }
+            logger.eval_log(data_title, stat_dict)
 
 def calc_carbon_majority(carbons):
     baseline_key = utils.get_baseline_key()
