@@ -1,5 +1,6 @@
 import os
 import joblib
+import io
 import numpy as np
 import matplotlib.pyplot as plt
 from algorithms.run_only import RunAgent
@@ -69,10 +70,11 @@ def plot_evaluation_results(loss_history, carbon_history, iterations):
 
     for alg, losses in loss_history.items():
         avg_loss = np.mean(losses)
+        std_loss = np.std(losses)
         line, = axes[0].plot(losses, label=alg, alpha=0.3, zorder=1)
-        # axes[0].plot(losses, label=alg, alpha=0.7)
         axes[0].axhline(avg_loss, label=f'Average {alg}', color=line.get_color(), linestyle='--')
-        
+        # axes[0].fill_between(range(len(losses)), avg_loss - std_loss, avg_loss + std_loss,
+        #                      color=line.get_color(), alpha=0.5, label=f'Std Dev {alg}')
            
     axes[0].set_title("Losses")
     axes[0].set_ylabel("Loss")

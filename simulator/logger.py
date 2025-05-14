@@ -10,18 +10,28 @@ def init_logging(project, config, alg_title):
 
 def train_log(e, loss, carbon, opt_carbon, regret):
     wandb.log({
-        "episode": e,
-        "train_loss": loss,
-        "carbon": carbon,
-        "optimal_carbon": opt_carbon,
-        "regret": regret
+        "train/episode": e,
+        "train/loss": loss,
+        "train/carbon": carbon,
+        "train/optimal_carbon": opt_carbon,
+        "train/regret": regret
     })
 
-def eval_log(data_type, mean, std, diff):
+def eval_log(data_type, stats):
     wandb.log({
-        f"{data_type}/mean": mean,
-        f"{data_type}/std": std,
-        f"{data_type}/baseline_diff": diff
+        f"eval/{data_type}/mean": stats['mean'],
+        f"eval/{data_type}/std": stats['std'],
+        f"eval/{data_type}/base_mean": stats['base_mean'],
+        f"eval/{data_type}/base_std": stats['base_std'],
+        f"eval/{data_type}/base_diff_percent": stats['base_diff_percent']
+    })
+
+def log(name, val):
+    wandb.log({name: val})
+
+def log_image(img, name):
+    wandb.log({
+        name: wandb.Image(img)
     })
 
 def get_name_from_config(alg_title, config):

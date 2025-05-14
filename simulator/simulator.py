@@ -11,13 +11,12 @@ from . import evaluator, logger
 from . import utils
 
 class Simulator():
-    def __init__(self, algs, job_size, episodes, alpha, lr, iterations, verbose, normalized, seed=None):
+    def __init__(self, algs, job_size, episodes, alpha, lr, verbose, normalized, seed=None):
         self.seed = np.random.randint(0, 2**36 - 1) if seed is None else seed
         self.job_size = job_size
         self.episodes = episodes
         self.alpha = alpha
         self.lr = lr
-        self.iterations = iterations
         self.verbose = verbose
         self.normalize = normalized
         self.train_size = 0.8
@@ -88,7 +87,7 @@ class Simulator():
             agent = alg_dict['alg']
             config = utils.build_config(self.job_size, self.alpha, agent.lr, self.episodes)
             if self.wandb_log:
-                logger.init_logging(project='train' + self.project_name,
+                logger.init_logging(project='train-' + self.project_name,
                                     config=config,
                                     alg_title=alg_title
                                     )
@@ -114,11 +113,10 @@ class Simulator():
             utils.save_model(agent, alg_title, config)
         print("End training...")
 
-    def evaluate(self, iterations=10000):
+    def evaluate(self, iterations):
         self.env.test()
         config = utils.build_config(self.job_size, self.alpha, self.lr, self.episodes)
         evaluator.evaluate(self.env, iterations, self.algs, config) 
-
 
     def plot_losses(self):
         sns.set_theme(style="darkgrid")
